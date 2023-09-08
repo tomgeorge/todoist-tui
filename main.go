@@ -100,7 +100,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			m.selectedProject = m.projects[m.cursor]
-      m.tasks = []types.Task{}
+			m.tasks = []types.Task{}
 			m.view++
 			return m, Tasks(m)
 		case "backspace":
@@ -110,7 +110,6 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.view--
 			}
 		}
-
 	case TaskMsg:
 		m.tasks = msg.tasks
 		return m, nil

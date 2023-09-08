@@ -13,8 +13,8 @@ import (
 )
 
 type store struct {
-  projects []types.Project
-  tasks map[string][]types.Task
+	projects []types.Project
+	tasks    map[string][]types.Task
 }
 
 type projectStore struct {
@@ -29,18 +29,18 @@ type tasksStore struct {
 
 type InMemoryCache struct {
 	client   *http.Client
-  store *store
+	store    *store
 	projects projectStore
 	tasks    tasksStore
 }
 
 func NewInMemoryCache(c *http.Client) *InMemoryCache {
 	return &InMemoryCache{
-		client:   c,
-    store: &store {
-      projects: []types.Project{},
-      tasks: map[string][]types.Task{},
-    },
+		client: c,
+		store: &store{
+			projects: []types.Project{},
+			tasks:    map[string][]types.Task{},
+		},
 		projects: projectStore{},
 		tasks:    tasksStore{},
 	}
@@ -75,14 +75,14 @@ func (m *InMemoryCache) GetProjects() []types.Project {
 		if jsonErr != nil {
 			log.Fatal(jsonErr)
 		}
-    m.store.projects = projects
+		m.store.projects = projects
 	}
-  return m.store.projects
+	return m.store.projects
 }
 
 func (m *InMemoryCache) GetTasks(project types.Project) []types.Task {
 	if len(m.store.tasks[project.Name]) == 0 {
-    log.Println("Haven't fetched yet, going to the API")
+		log.Println("Haven't fetched yet, going to the API")
 		url, _ := url.Parse(fmt.Sprintf("https://api.todoist.com/rest/v2/tasks?project_id=%s", project.Id))
 		res, err := m.client.Do(&http.Request{
 			URL:    url,
@@ -109,7 +109,7 @@ func (m *InMemoryCache) GetTasks(project types.Project) []types.Task {
 		if jsonErr != nil {
 			log.Fatal(jsonErr)
 		}
-    m.store.tasks[project.Name] = tasks
+		m.store.tasks[project.Name] = tasks
 	}
 	return m.store.tasks[project.Name]
 }

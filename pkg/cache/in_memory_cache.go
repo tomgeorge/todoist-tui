@@ -17,21 +17,9 @@ type store struct {
 	tasks    map[string][]types.Task
 }
 
-type projectStore struct {
-	fetched  bool
-	projects []types.Project
-}
-
-type tasksStore struct {
-	fetched bool
-	tasks   []types.Task
-}
-
 type InMemoryCache struct {
 	client   *http.Client
 	store    *store
-	projects projectStore
-	tasks    tasksStore
 }
 
 func NewInMemoryCache(c *http.Client) *InMemoryCache {
@@ -41,8 +29,6 @@ func NewInMemoryCache(c *http.Client) *InMemoryCache {
 			projects: []types.Project{},
 			tasks:    map[string][]types.Task{},
 		},
-		projects: projectStore{},
-		tasks:    tasksStore{},
 	}
 }
 

@@ -110,12 +110,16 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		case "up", "k":
-			if m.projectCursor > 0 {
-				m.projectCursor--
+			if m.view == ProjectsView {
+				if m.projectCursor > 0 {
+					m.projectCursor--
+				}
 			}
 		case "down", "j":
-			if m.projectCursor < len(m.projects)-1 {
-				m.projectCursor++
+			if m.view == ProjectsView {
+				if m.projectCursor < len(m.projects)-1 {
+					m.projectCursor++
+				}
 			}
 		case "enter":
 			m.selectedProject = m.projects[m.projectCursor]
@@ -136,6 +140,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case TaskMsg:
 		var items = []list.Item{}
+		m.tasks = msg.tasks
 		for _, task := range msg.tasks {
 			log.Println("Appending to task list")
 			items = append(items, item{
@@ -186,7 +191,30 @@ func (m model) View() string {
 		body += docStyle.Render(m.taskList.View())
 		return body
 	case TaskWindow:
-		return fmt.Sprintf("%v", m.selectedTask)
+		return RenderTask(m.selectedTask)
 	}
 	return "Loading"
+}
+
+func RenderTask(task types.Task) string {
+	out := ""
+	out += "Creator ID: " + task.CreatorId + "\n"
+	out += "Created At: " + task.CreatedAt + "\n"
+	out += "Assignee ID: " + task.AssigneeId + "\n"
+	out += "Assigner ID: " + task.AssignerId + "\n"
+	out += "Comment Count: " + string(task.CommentCount) + "\n"
+	out += fmt.Sprintf("Is Completed? %v\n", task.IsCompleted)
+	out += "Content: " + task.Content + "\n"
+	out += "Description: " + task.Description + "\n"
+	out += "Due: " + task.Due.String + "\n"
+	out += " Duration: " + task.Duration + "\n"
+	out += "ID: " + task.Id + "\n"
+	out += fmt.Sprintf("Labels: %v\n", task.Labels)
+	out += "Order: " + string(task.Order) + "\n"
+	out += "Priority: " + string(task.Priority) + "\n"
+	out += "Project ID: " + task.ProjectId + "\n"
+	out += "Section ID: " + task.SectionId + "\n"
+	out += "Parent ID: " + task.ParentId + "\n"
+	out += "Url: " + task.Url + "\n"
+	return out
 }

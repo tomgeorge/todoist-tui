@@ -13,7 +13,7 @@ type Task struct {
 	CreatedAt    string   `json:"created_at"`
 	AssigneeId   string   `json:"assignee_id"`
 	AssignerId   string   `json:"assigner_id"`
-	CommentCound int      `json:"comment_count"`
+	CommentCount int      `json:"comment_count"`
 	IsCompleted  bool     `json:"is_completed"`
 	Content      string   `json:"content"`
 	Description  string   `json:"description"`

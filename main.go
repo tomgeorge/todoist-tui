@@ -192,6 +192,16 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.taskModel.Focused() {
 				m.taskModel.MoveDown(1)
 			}
+    case key.Matches(msg, Keys.Left):
+      if m.taskModel.Focused() {
+        m.taskModel.Blur()
+        m.projectModel.Focus()
+      }
+    case key.Matches(msg, Keys.Right):
+      if m.projectModel.Focused() {
+        m.projectModel.Blur()
+        m.taskModel.Focus()
+      }
 		case key.Matches(msg, Keys.Enter):
 			m.fetchingTasks = true
 			m.projectModel.Blur()

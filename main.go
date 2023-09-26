@@ -67,6 +67,7 @@ type model struct {
 	projectModel    table.Model
 	taskModel       table.Model
 	help            help.Model
+	fetchingTasks   bool
 }
 
 type projectMsg struct {
@@ -88,7 +89,7 @@ func InitializeModel() *model {
 		taskList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 20, 20),
 		view:            ProjectsView,
 		projectModel:    buildTable(buildProjectColumns(), "Loading"),
-		taskModel:       buildTable(buildTaskColumns(), "Select a project to see tasks"),
+		taskModel:       buildTable(buildTaskColumns(), "No Project Selected"),
 		help:            help.New(),
 	}
 	m.projectModel.Focus()
@@ -127,18 +128,23 @@ type TaskMsg struct {
 func Tasks(m model) tea.Cmd {
 	return func() tea.Msg {
 		log.Println("Getting tasks from cache")
+		log.Println("Returning a task msg")
 		return TaskMsg{m.cache.GetTasks(m.selectedProject)}
 	}
 }
 
 func Task(m model) tea.Cmd {
 	return func() tea.Msg {
+		log.Println("Task() - Fetching tasks")
 		return taskViewMsg{m.cache.GetTasks(m.selectedProject)[m.taskList.Index()]}
 	}
 }
 
 func (m model) taskView() string {
 	m.taskModel.SetHeight(screenHeight - 15)
+	if m.fetchingTasks {
+		m.taskModel.SetRows([]table.Row{{"Fetching tasks..."}})
+	}
 	return lipgloss.JoinVertical(lipgloss.Center, m.taskModel.View())
 }
 
@@ -187,15 +193,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.taskModel.MoveDown(1)
 			}
 		case key.Matches(msg, Keys.Enter):
-			m.selectedProject = m.projects[m.projectCursor]
-			m.tasks = []types.Task{}
-			if m.view == ProjectsView {
-				m.view++
-				return m, Tasks(m)
-			} else if m.view == TasksView {
-				m.view++
-				return m, Task(m)
-			}
+			m.fetchingTasks = true
+			m.projectModel.Blur()
+			m.taskModel.Focus()
+			return m, Tasks(m)
 		case key.Matches(msg, Keys.Top):
 			log.Println("Key top msg")
 			if m.projectModel.Focused() {
@@ -213,18 +214,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case TaskMsg:
-		var items = []list.Item{}
+		log.Println("Got task msg")
+		m.fetchingTasks = false
 		m.tasks = msg.tasks
-		for _, task := range msg.tasks {
-			log.Println("Appending to task list")
-			items = append(items, item{
-				createdDate: task.CreatedAt,
-				desc:        task.Content,
-			})
-		}
-		m.taskList.Title = "Tasks"
-		m.taskList.SetItems(items)
-		m.taskModel.SetRows(tasksToRows(m.tasks))
+		m.taskModel.SetRows(tasksToRows(msg.tasks))
 		m.taskModel.Focus()
 	case taskViewMsg:
 		m.selectedTask = msg.task
@@ -245,26 +238,24 @@ func (i item) FilterValue() string { return i.createdDate }
 
 func (m model) View() string {
 	log.Println("In View()")
-	switch m.view {
-	case ProjectsView:
-		log.Printf("project model rows are %v", len(m.projectModel.Rows()))
-		projectView := selectedBoxStyle.Render(m.projectView())
-		taskView := unselectedBoxStyle.Render(m.taskView())
+	log.Printf("project model rows are %v", len(m.projectModel.Rows()))
+  var projectView, taskView string
+  if m.projectModel.Focused() {
+    projectView = selectedBoxStyle.Render(m.projectView())
+    taskView = unselectedBoxStyle.Render(m.taskView())
+  } else if m.taskModel.Focused() {
+    projectView = unselectedBoxStyle.Render(m.projectView())
+    taskView = selectedBoxStyle.Render(m.taskView())
+  }
 
-		viewArr := []string{projectView}
-		viewArr = append(viewArr, taskView)
+	viewArr := []string{projectView}
+	viewArr = append(viewArr, taskView)
 
-		tables := lipgloss.JoinHorizontal(lipgloss.Center, viewArr...)
-		tables += lipgloss.JoinVertical(lipgloss.Left,
-			fmt.Sprintf("\nSelected %s\n", m.selectedProject.Name),
-			m.help.View(Keys))
-		return tables
-	case TasksView:
-		return selectedBoxStyle.Render(m.taskModel.View())
-	case TaskWindow:
-		return RenderTask(m.selectedTask)
-	}
-	return "Loading"
+	tables := lipgloss.JoinHorizontal(lipgloss.Center, viewArr...)
+	tables += lipgloss.JoinVertical(lipgloss.Left,
+		fmt.Sprintf("\nSelected %s\n", m.selectedProject.Name),
+		m.help.View(Keys))
+	return tables
 }
 
 func projectColor(project types.Project) string {
@@ -287,7 +278,7 @@ func buildProjectColumns() []table.Column {
 
 func buildTaskColumns() []table.Column {
 	return []table.Column{
-		{Title: "Task", Width: 25},
+		{Title: "Task", Width: 35},
 		{Title: "Created At", Width: 10},
 	}
 }

@@ -96,6 +96,7 @@ func (m *InMemoryCache) GetTasks(project types.Project) []types.Task {
 			log.Fatal(jsonErr)
 		}
 		m.store.tasks[project.Name] = tasks
+    log.Println("InMemoryCache.GetTasks - I got some tasks back from the API")
 	}
 	return m.store.tasks[project.Name]
 }

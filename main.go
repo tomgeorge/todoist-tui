@@ -9,7 +9,10 @@ import (
 	"github.com/tomgeorge/todoist-tui/pkg/cache"
 	"github.com/tomgeorge/todoist-tui/pkg/types"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,28 +28,28 @@ const (
 )
 
 var (
-  colors map[string]lipgloss.Color = map[string]lipgloss.Color {
-    "berry_red": lipgloss.Color("#b8256f"),
-    "red": lipgloss.Color("#db4035"),
-    "orange": lipgloss.Color("#ff9933"),
-    "yellow": lipgloss.Color("#fad000"),
-    "olive_green": lipgloss.Color("#afb83b"),
-    "lime_green": lipgloss.Color("#7ecc49"),
-    "green": lipgloss.Color("#299438"),
-    "mint_green": lipgloss.Color("#6accbc"),
-    "teal": lipgloss.Color("#158fad"),
-    "sky_blue": lipgloss.Color("#14aaf5"),
-    "light_blue": lipgloss.Color("#96c3eb"),
-    "blue": lipgloss.Color("#4073ff"),
-    "grape": lipgloss.Color("#884dff"),
-    "violet": lipgloss.Color("#af38eb"),
-    "lavender": lipgloss.Color("#eb96eb"),
-    "magenta": lipgloss.Color("#e05194"),
-    "salmon": lipgloss.Color("#ff8d85"),
-    "charcoal": lipgloss.Color("#808080"),
-    "grey": lipgloss.Color("#b8b8b8"),
-    "taupe": lipgloss.Color("#ccac93"),
-  }
+	colors map[string]lipgloss.Color = map[string]lipgloss.Color{
+		"berry_red":   lipgloss.Color("#b8256f"),
+		"red":         lipgloss.Color("#db4035"),
+		"orange":      lipgloss.Color("#ff9933"),
+		"yellow":      lipgloss.Color("#fad000"),
+		"olive_green": lipgloss.Color("#afb83b"),
+		"lime_green":  lipgloss.Color("#7ecc49"),
+		"green":       lipgloss.Color("#299438"),
+		"mint_green":  lipgloss.Color("#6accbc"),
+		"teal":        lipgloss.Color("#158fad"),
+		"sky_blue":    lipgloss.Color("#14aaf5"),
+		"light_blue":  lipgloss.Color("#96c3eb"),
+		"blue":        lipgloss.Color("#4073ff"),
+		"grape":       lipgloss.Color("#884dff"),
+		"violet":      lipgloss.Color("#af38eb"),
+		"lavender":    lipgloss.Color("#eb96eb"),
+		"magenta":     lipgloss.Color("#e05194"),
+		"salmon":      lipgloss.Color("#ff8d85"),
+		"charcoal":    lipgloss.Color("#808080"),
+		"grey":        lipgloss.Color("#b8b8b8"),
+		"taupe":       lipgloss.Color("#ccac93"),
+	}
 )
 
 var docStyle = lipgloss.NewStyle().Margin(1, 2)
@@ -61,6 +64,9 @@ type model struct {
 	tasks           []types.Task
 	taskList        list.Model
 	view            View
+	projectModel    table.Model
+	taskModel       table.Model
+	help            help.Model
 }
 
 type projectMsg struct {
@@ -71,8 +77,8 @@ type taskViewMsg struct {
 	task types.Task
 }
 
-func main() {
-	initialModel := model{
+func InitializeModel() *model {
+	m := &model{
 		cache:           cache.NewInMemoryCache(&http.Client{Timeout: 10 * time.Second}),
 		choice:          0,
 		projectCursor:   0,
@@ -81,13 +87,23 @@ func main() {
 		selectedProject: types.Project{},
 		taskList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 20, 20),
 		view:            ProjectsView,
+		projectModel:    buildTable(buildProjectColumns(), "Loading"),
+		taskModel:       buildTable(buildTaskColumns(), "Select a project to see tasks"),
+		help:            help.New(),
 	}
+	m.projectModel.Focus()
+	m.taskModel.Blur()
+	return m
+}
+
+func main() {
 	f, err := tea.LogToFile("debug.log", "debug")
 	if err != nil {
 		log.Fatal("Could not open log file", err)
 	}
 	defer f.Close()
-	p := tea.NewProgram(initialModel, tea.WithAltScreen())
+	model := InitializeModel()
+	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -121,32 +137,56 @@ func Task(m model) tea.Cmd {
 	}
 }
 
+func (m model) taskView() string {
+	m.taskModel.SetHeight(screenHeight - 15)
+	return lipgloss.JoinVertical(lipgloss.Center, m.taskModel.View())
+}
+
+func (m model) projectView() string {
+	m.projectModel.SetHeight(screenHeight - 15)
+	return lipgloss.JoinVertical(lipgloss.Center, m.projectModel.View())
+}
+
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	log.Println("In Update()")
+	log.Printf("project model rows are %v", len(m.projectModel.Rows()))
 	switch msg := message.(type) {
+	case tea.WindowSizeMsg:
+		log.Println("Got a windowsize msg")
+		screenWidth = msg.Width
+		screenHeight = msg.Height
 	case projectMsg:
 		log.Println("Update got a projects message")
 		m.projects = msg.projects
+		m.projectModel.SetRows(toRows(m.projects))
+		m.setSelectedProject()
+		m.projectModel.Focus()
 		return m, nil
 
 	case tea.KeyMsg:
 		log.Println("Update got a key message")
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		switch {
+		case key.Matches(msg, Keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+		case key.Matches(msg, Keys.Quit):
 			return m, tea.Quit
-		case "up", "k":
-			if m.view == ProjectsView {
-				if m.projectCursor > 0 {
-					m.projectCursor--
-				}
+		case key.Matches(msg, Keys.Up):
+			if m.projectModel.Focused() {
+				m.projectModel.MoveUp(1)
+				m.setSelectedProject()
 			}
-		case "down", "j":
-			if m.view == ProjectsView {
-				if m.projectCursor < len(m.projects)-1 {
-					m.projectCursor++
-				}
+			if m.taskModel.Focused() {
+				m.taskModel.MoveUp(1)
 			}
-		case "enter":
+		case key.Matches(msg, Keys.Down):
+			if m.projectModel.Focused() {
+				m.projectModel.MoveDown(1)
+				m.setSelectedProject()
+			}
+			if m.taskModel.Focused() {
+				m.taskModel.MoveDown(1)
+			}
+		case key.Matches(msg, Keys.Enter):
 			m.selectedProject = m.projects[m.projectCursor]
 			m.tasks = []types.Task{}
 			if m.view == ProjectsView {
@@ -156,11 +196,20 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.view++
 				return m, Task(m)
 			}
-		case "backspace":
-			if m.view == 0 {
-				m.view = 0
-			} else {
-				m.view--
+		case key.Matches(msg, Keys.Top):
+			log.Println("Key top msg")
+			if m.projectModel.Focused() {
+				cursorPosition := m.projectModel.Cursor()
+				m.projectModel.MoveUp(cursorPosition)
+				m.setSelectedProject()
+			}
+		case key.Matches(msg, Keys.Bottom):
+			log.Println("key bottom message")
+			if m.projectModel.Focused() {
+				rowCount := len(m.projectModel.Rows())
+				cursorPosition := m.projectModel.Cursor()
+				m.projectModel.MoveDown(rowCount - cursorPosition)
+				m.setSelectedProject()
 			}
 		}
 	case TaskMsg:
@@ -175,6 +224,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.taskList.Title = "Tasks"
 		m.taskList.SetItems(items)
+		m.taskModel.SetRows(tasksToRows(m.tasks))
+		m.taskModel.Focus()
 	case taskViewMsg:
 		m.selectedTask = msg.task
 	}
@@ -196,26 +247,20 @@ func (m model) View() string {
 	log.Println("In View()")
 	switch m.view {
 	case ProjectsView:
-		body := "Todoist Project List\n\n"
-		for i, project := range m.projects {
-			cursor := " "
-			if m.projectCursor == i {
-				cursor = ">"
-			}
-      projectColor := projectColor(project)
-			body += fmt.Sprintf("%s %s %s\n", cursor, projectColor, project.Name)
-		}
-		body += fmt.Sprintf("Selected Project: %s", m.selectedProject.Name)
-		body += "\nPress q to quit"
-		return body
+		log.Printf("project model rows are %v", len(m.projectModel.Rows()))
+		projectView := selectedBoxStyle.Render(m.projectView())
+		taskView := unselectedBoxStyle.Render(m.taskView())
+
+		viewArr := []string{projectView}
+		viewArr = append(viewArr, taskView)
+
+		tables := lipgloss.JoinHorizontal(lipgloss.Center, viewArr...)
+		tables += lipgloss.JoinVertical(lipgloss.Left,
+			fmt.Sprintf("\nSelected %s\n", m.selectedProject.Name),
+			m.help.View(Keys))
+		return tables
 	case TasksView:
-		body := fmt.Sprintf("Tasks for %s", m.selectedProject.Name)
-		body += fmt.Sprintf("\n\nTasks For Project %s %s\n\n", projectColor(m.selectedProject), m.selectedProject.Name)
-		if len(m.taskList.Items()) == 0 {
-			body += "No tasks found ✨"
-		}
-		body += docStyle.Render(m.taskList.View())
-		return body
+		return selectedBoxStyle.Render(m.taskModel.View())
 	case TaskWindow:
 		return RenderTask(m.selectedTask)
 	}
@@ -223,7 +268,28 @@ func (m model) View() string {
 }
 
 func projectColor(project types.Project) string {
-  return lipgloss.NewStyle().Background(colors[project.Color]).Render("  ")
+	return lipgloss.NewStyle().Background(colors[project.Color]).Render("  ")
+}
+
+func buildTable(columns []table.Column, defaultMessage string) table.Model {
+	return table.New(
+		table.WithHeight(projectTableHeight),
+		table.WithColumns(columns),
+		table.WithRows([]table.Row{{defaultMessage}}),
+	)
+}
+
+func buildProjectColumns() []table.Column {
+	return []table.Column{
+		{Title: "Projects", Width: 25},
+	}
+}
+
+func buildTaskColumns() []table.Column {
+	return []table.Column{
+		{Title: "Task", Width: 25},
+		{Title: "Created At", Width: 10},
+	}
 }
 
 func RenderTask(task types.Task) string {
@@ -247,4 +313,32 @@ func RenderTask(task types.Task) string {
 	out += "Parent ID: " + task.ParentId + "\n"
 	out += "Url: " + task.Url + "\n"
 	return out
+}
+
+func toRows(projects []types.Project) []table.Row {
+	log.Printf("projects length is %v", len(projects))
+	rows := make([]table.Row, 0, len(projects))
+	for _, project := range projects {
+		rows = append(rows, []string{project.Name})
+	}
+	log.Printf("Returning a list of %v rows", len(rows))
+	return rows
+}
+
+func tasksToRows(tasks []types.Task) []table.Row {
+	if len(tasks) == 0 {
+		return []table.Row{
+			{"No tasks found ✨"},
+		}
+	}
+	rows := make([]table.Row, 0, len(tasks))
+	for _, task := range tasks {
+		rows = append(rows, []string{task.Content, task.CreatedAt})
+	}
+	return rows
+}
+
+func (m *model) setSelectedProject() {
+	cursorPosition := m.projectModel.Cursor()
+	m.selectedProject = m.projects[cursorPosition]
 }

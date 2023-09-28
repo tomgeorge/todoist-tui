@@ -4,4 +4,9 @@
 
 [Find your API token](https://todoist.com/help/articles/find-your-api-token)
 
-`TODOIST_API_TOKEN=$(cat ~/todoist-api-token) go run main.go`
+Store it in a file called `todoist-api-token` in your home directory. (example: `~/todoist-api-token`)
+
+`make run`
+
+
+`make help` for more options

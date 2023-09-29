@@ -1,3 +1,5 @@
+[![Test](https://github.com/tomgeorge/todoist-tui/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/tomgeorge/todoist-tui/actions/workflows/test.yaml)
+
 # A Terminal App for Todoist
 
 ## Running

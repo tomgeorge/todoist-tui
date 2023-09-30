@@ -10,6 +10,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/pkg/cache"
 	"github.com/tomgeorge/todoist-tui/pkg/types"
 
+	"github.com/76creates/stickers/flexbox"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -69,6 +70,104 @@ type model struct {
 	taskModel       table.Model
 	help            help.Model
 	fetchingTasks   bool
+	taskView        *taskViewModel
+	viewingTask     bool
+}
+
+type taskViewModel struct {
+	task    *types.Task
+	flexBox *flexbox.HorizontalFlexBox
+}
+
+func initializeTaskViewModel() *taskViewModel {
+	return &taskViewModel{
+		task:    &types.Task{},
+		flexBox: flexbox.NewHorizontal(0, 0),
+	}
+}
+
+func (t *taskViewModel) UpdateWindowSize(width, height int) {
+	t.flexBox.SetWidth(width)
+	t.flexBox.SetHeight(height)
+}
+
+func (t *taskViewModel) Init() tea.Cmd {
+	return nil
+}
+
+func (t *taskViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		log.Println("TaskViewModel - Got windowsizeMessage")
+		t.flexBox.SetWidth(msg.Width)
+		t.flexBox.SetHeight(msg.Height)
+	}
+	return t, nil
+}
+
+var (
+	style1  = lipgloss.NewStyle().Background(lipgloss.Color("#fc5c65"))
+	style2  = lipgloss.NewStyle().Background(lipgloss.Color("#fd9644"))
+	style3  = lipgloss.NewStyle().Background(lipgloss.Color("#fed330"))
+	style4  = lipgloss.NewStyle().Background(lipgloss.Color("#26de81"))
+	style5  = lipgloss.NewStyle().Background(lipgloss.Color("#2bcbba"))
+	style6  = lipgloss.NewStyle().Background(lipgloss.Color("#eb3b5a"))
+	style7  = lipgloss.NewStyle().Background(lipgloss.Color("#fa8231"))
+	style8  = lipgloss.NewStyle().Background(lipgloss.Color("#f7b731"))
+	style9  = lipgloss.NewStyle().Background(lipgloss.Color("#20bf6b"))
+	style10 = lipgloss.NewStyle().Background(lipgloss.Color("#0fb9b1"))
+	style11 = lipgloss.NewStyle().Background(lipgloss.Color("#45aaf2"))
+	style12 = lipgloss.NewStyle().Background(lipgloss.Color("#4b7bec"))
+	style13 = lipgloss.NewStyle().Background(lipgloss.Color("#a55eea"))
+	style14 = lipgloss.NewStyle().Background(lipgloss.Color("#d1d8e0"))
+	style15 = lipgloss.NewStyle().Background(lipgloss.Color("#778ca3"))
+	style16 = lipgloss.NewStyle().Background(lipgloss.Color("#2d98da"))
+	style17 = lipgloss.NewStyle().Background(lipgloss.Color("#3867d6"))
+	style18 = lipgloss.NewStyle().Background(lipgloss.Color("#8854d0"))
+	style19 = lipgloss.NewStyle().Background(lipgloss.Color("#a5b1c2"))
+	style20 = lipgloss.NewStyle().Background(lipgloss.Color("#4b6584"))
+)
+
+func (t *taskViewModel) View() string {
+	headerStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		Background(lipgloss.Color("#a5b1c2"))
+
+	log.Println(t.flexBox.GetHeight())
+	log.Println(t.flexBox.GetWidth())
+
+
+	cols := []*flexbox.Column{
+		t.flexBox.NewColumn().AddCells(
+			flexbox.NewCell(8, 1).SetStyle(style1),
+      flexbox.NewCell(8, 9).SetStyle(style2),
+		),
+		t.flexBox.NewColumn().AddCells(
+			flexbox.NewCell(6, 1).SetStyle(style3),
+		),
+	}
+	t.flexBox.AddColumns(cols)
+	return t.flexBox.Render()
+	contentStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder())
+
+	sidebarStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder())
+
+	content := lipgloss.JoinVertical(lipgloss.Top,
+		headerStyle.Render(t.task.ProjectId),
+		contentStyle.Render(t.task.Content),
+		contentStyle.Render(t.task.Description))
+	sidebar := lipgloss.JoinVertical(lipgloss.Right,
+		sidebarStyle.Render(t.task.ProjectId),
+		sidebarStyle.Render(t.task.Due.Date),
+		sidebarStyle.Render(fmt.Sprint(t.task.Priority)),
+		sidebarStyle.Render(t.task.Labels...))
+	return lipgloss.JoinVertical(lipgloss.Center, t.flexBox.Render(), content, sidebar)
+}
+
+func (t *taskViewModel) SetTask(task *types.Task) {
+	t.task = task
 }
 
 type projectMsg struct {
@@ -92,6 +191,7 @@ func InitializeModel() *model {
 		projectModel:    buildTable(buildProjectColumns(), "Loading"),
 		taskModel:       buildTable(buildTaskColumns(), "No Project Selected"),
 		help:            help.New(),
+		taskView:        initializeTaskViewModel(),
 	}
 	m.projectModel.Focus()
 	m.taskModel.Blur()
@@ -141,7 +241,7 @@ func Task(m model) tea.Cmd {
 	}
 }
 
-func (m model) taskView() string {
+func (m model) getTaskView() string {
 	m.taskModel.SetHeight(screenHeight - 15)
 	if m.fetchingTasks {
 		m.taskModel.SetRows([]table.Row{{"Fetching tasks..."}})
@@ -159,9 +259,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	log.Printf("project model rows are %v", len(m.projectModel.Rows()))
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
-		log.Println("Got a windowsize msg")
 		screenWidth = msg.Width
 		screenHeight = msg.Height
+		m.taskView.UpdateWindowSize(screenWidth, screenHeight)
 	case projectMsg:
 		log.Println("Update got a projects message")
 		m.projects = msg.projects
@@ -193,21 +293,25 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.taskModel.Focused() {
 				m.taskModel.MoveDown(1)
 			}
-    case key.Matches(msg, Keys.Left):
-      if m.taskModel.Focused() {
-        m.taskModel.Blur()
-        m.projectModel.Focus()
-      }
-    case key.Matches(msg, Keys.Right):
-      if m.projectModel.Focused() {
-        m.projectModel.Blur()
-        m.taskModel.Focus()
-      }
+		case key.Matches(msg, Keys.Left):
+			if m.taskModel.Focused() {
+				m.taskModel.Blur()
+				m.projectModel.Focus()
+			}
+		case key.Matches(msg, Keys.Right):
+			if m.projectModel.Focused() {
+				m.projectModel.Blur()
+				m.taskModel.Focus()
+			}
 		case key.Matches(msg, Keys.Enter):
-			m.fetchingTasks = true
-			m.projectModel.Blur()
-			m.taskModel.Focus()
-			return m, Tasks(m)
+			if m.projectModel.Focused() {
+				m.fetchingTasks = true
+				m.projectModel.Blur()
+				m.taskModel.Focus()
+				return m, Tasks(m)
+			} else if m.taskModel.Focused() {
+				return m, Task(m)
+			}
 		case key.Matches(msg, Keys.Top):
 			log.Println("Key top msg")
 			if m.projectModel.Focused() {
@@ -231,6 +335,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.taskModel.SetRows(tasksToRows(msg.tasks))
 		m.taskModel.Focus()
 	case taskViewMsg:
+		m.viewingTask = true
+		m.taskView.SetTask(&msg.task)
 		m.selectedTask = msg.task
 	}
 	var cmd tea.Cmd
@@ -250,21 +356,24 @@ func (i item) FilterValue() string { return i.createdDate }
 func (m model) View() string {
 	log.Println("In View()")
 	log.Printf("project model rows are %v", len(m.projectModel.Rows()))
-  var projectView, taskView string
-  if m.projectModel.Focused() {
-    projectView = selectedBoxStyle.Render(m.projectView())
-    taskView = unselectedBoxStyle.Render(m.taskView())
-  } else if m.taskModel.Focused() {
-    projectView = unselectedBoxStyle.Render(m.projectView())
-    taskView = selectedBoxStyle.Render(m.taskView())
-  }
+	if m.viewingTask {
+		return m.taskView.View()
+	}
+	var projectView, taskView string
+	if m.projectModel.Focused() {
+		projectView = selectedBoxStyle.Render(m.projectView())
+		taskView = unselectedBoxStyle.Render(m.getTaskView())
+	} else if m.taskModel.Focused() {
+		projectView = unselectedBoxStyle.Render(m.projectView())
+		taskView = selectedBoxStyle.Render(m.getTaskView())
+	}
 
 	viewArr := []string{projectView}
 	viewArr = append(viewArr, taskView)
 
 	tables := lipgloss.JoinHorizontal(lipgloss.Center, viewArr...)
 	tables += lipgloss.JoinVertical(lipgloss.Left,
-		fmt.Sprintf("\nSelected %s\n", m.selectedProject.Name),
+		fmt.Sprintf("\n%s\n", m.selectedTask.Content),
 		m.help.View(Keys))
 	return tables
 }

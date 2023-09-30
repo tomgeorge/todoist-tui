@@ -1,3 +1,7 @@
+github.com/76creates/stickers v1.3.0 h1:8qhDy2UNGDoybiFPVGT2ITcS16zjM8l18nELZIgdwCE=
+github.com/76creates/stickers v1.3.0/go.mod h1:z/6G23++VMIXkwi+nFfb4H6Y4dIo6UsHULeYPp2DAkQ=
+github.com/76creates/stickers v1.3.1-0.20230410064447-c0cf398aec57 h1:HGmo5UmCmQbL1BxDWhVcf4nYr4qnXDG4My0n4CQBySI=
+github.com/76creates/stickers v1.3.1-0.20230410064447-c0cf398aec57/go.mod h1:OnGyCp42wnTwuZv2Ewh4dkvMuaiWMoH4I80yU2IJVmI=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/date_picker"
 	"github.com/tomgeorge/todoist-tui/model/events"
@@ -64,6 +65,7 @@ var defaultKeys = keyMap{
 }
 
 type Model struct {
+	ctx           ctx.Context
 	viewport      viewport.Model
 	focusedStyle  lipgloss.Style
 	width         int
@@ -113,7 +115,7 @@ var validationStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#e5c891")).
 	MarginBottom(1)
 
-func New(opts ...ModelOption) *Model {
+func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	defaultProjects := []picker.PickerItem{}
 	defaultLabels := []picker.PickerItem{}
 	defaultPriorities := []picker.PickerItem{}
@@ -176,10 +178,11 @@ func New(opts ...ModelOption) *Model {
 		button.WithEnabled(true),
 		button.WithFocusedStyle(lipgloss.NewStyle().Background(lipgloss.Color("#a6d189")).Foreground(lipgloss.Color("#414559"))),
 	)
-	events := events.New()
+	events := events.New(ctx)
 
 	viewport := viewport.New(initialWidth, initialHeight)
 	model := &Model{
+		ctx:      ctx,
 		viewport: viewport,
 		focusedStyle: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), true),
@@ -374,15 +377,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		var event events.NewMessage
 		if msg.Error == nil {
 			event = events.NewMessage{
-				Timeout: 10 * time.Second,
-				Message: "Task updated successfully",
-				Style:   lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
+				Duration: 10 * time.Second,
+				Message:  "Task updated successfully",
+				Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
 			}
 		} else {
 			event = events.NewMessage{
-				Timeout: 10 * time.Second,
-				Message: msg.Error.Error(),
-				Style:   lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
+				Duration: 10 * time.Second,
+				Message:  msg.Error.Error(),
+				Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
 			}
 		}
 		m.showSpinner = false

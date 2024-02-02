@@ -58,11 +58,12 @@ func initializeCobra(cmd *cobra.Command) {
 		if err := viper.ReadInConfig(); err == nil {
 			fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 		}
+		config.SetDefaults()
 	}
 }
 
 func loadLogger(logfilePath string) (*zap.Logger, error) {
-	cfg := zap.NewProductionConfig()
+	cfg := zap.NewDevelopmentConfig()
 	cfg.OutputPaths = []string{
 		logfilePath,
 	}

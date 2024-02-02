@@ -3,11 +3,11 @@ package model
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/model/events"
 	"github.com/tomgeorge/todoist-tui/model/project_view"
@@ -25,20 +25,22 @@ const (
 )
 
 type Model struct {
-	loading     bool
-	spinner     spinner.Model
-	state       *sync.SyncResponse
-	ctx         ctx.Context
-	events      events.Model
-	project     *types.Project
-	tasks       []*types.Item
-	labels      []*types.Label
-	projects    []*types.Project
-	projectView project_view.Model
-	taskCreate  task_create.Model
-	index       ViewIndex
-	width       int
-	height      int
+	loading      bool
+	loadingError string
+	errorStyle   lipgloss.Style
+	spinner      spinner.Model
+	state        *sync.SyncResponse
+	ctx          ctx.Context
+	events       events.Model
+	project      *types.Project
+	tasks        []*types.Item
+	labels       []*types.Label
+	projects     []*types.Project
+	projectView  project_view.Model
+	taskCreate   task_create.Model
+	index        ViewIndex
+	width        int
+	height       int
 }
 
 func New(ctx ctx.Context) *Model {
@@ -49,10 +51,11 @@ func New(ctx ctx.Context) *Model {
 	)
 	return &Model{
 		loading:     defaultLoading,
-		spinner:     spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("205")))),
+		errorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#ed8796")),
+		spinner:     spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#939ab7")))),
 		state:       nil,
 		ctx:         ctx,
-		events:      *events.New(),
+		events:      *events.New(ctx),
 		project:     nil,
 		projects:    nil,
 		tasks:       nil,
@@ -84,17 +87,13 @@ func startSpinner() tea.Cmd {
 
 func (m Model) Init() tea.Cmd {
 	m.ctx.Logger.Info("Hey")
-	return tea.Batch(m.performSync(), m.spinner.Tick)
+	return tea.Batch(m.performSync(), startSpinner())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case events.NewMessage:
-		m.ctx.Logger.Info("got events.NewMessage")
-		m.events, cmd = m.events.Update(msg)
-		return m, cmd
 	case StartSpinnerMessage:
 		m.loading = true
 		cmds = append(cmds, m.spinner.Tick)
@@ -106,14 +105,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StateMessage:
 		if msg.err != nil {
 			err := fmt.Sprintf("failed to get data from todoist: %s", msg.err.Error())
-			m.ctx.Logger.Error("got statemessage", err)
-			return m, tea.Batch(
-				m.events.Publish(err, lipgloss.NewStyle().Foreground(lipgloss.Color("205")), 5*time.Second, true),
-			)
+			m.loadingError = err
+			return m, tea.Sequence(tea.Quit)
 		}
 		m.loading = false
 		m.state = msg.state
-		m.projectView = *project_view.New(m.state.Projects[0], m.state.Items)
+		tasks := lo.Filter(m.state.Items, func(i *types.Item, _ int) bool {
+			return i.ProjectId == m.state.Projects[0].Id
+		})
+		m.projectView = *project_view.New(m.state.Projects[0], tasks)
+		m.index = projectView
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -122,6 +123,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case project_view.UpdateTaskMsg:
 		m.projectView.SetFocused(false)
 		newModel := task_create.New(
+			m.ctx,
 			task_create.WithTask(&msg.Task),
 			task_create.WithParentProject(m.projectView.Project()),
 			task_create.WithProjects(m.projects),
@@ -136,22 +138,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
-	m.ctx.Logger.Info("index", m.index)
+	m.ctx.Logger.Info("index ", m.index)
 	switch m.index {
 	case taskCreate:
 		m.taskCreate, cmd = m.taskCreate.Update(msg)
+		cmds = append(cmds, cmd)
 	case projectView:
 		m.projectView, cmd = m.projectView.Update(msg)
+		cmds = append(cmds, cmd)
 	}
-	return m, cmd
+	m.events, cmd = m.events.Update(msg)
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
 	var sections []string
 	if m.loading {
-		sections = append(sections, fmt.Sprintf("%s fetching data from todoist", m.spinner.View()))
-		sections = append(sections, m.events.View())
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		sections = append(sections, fmt.Sprintf("%s fetching data from todoist...%s",
+			m.spinner.View(),
+			m.errorStyle.Render(m.loadingError)))
 	}
 	switch m.index {
 	case taskCreate:

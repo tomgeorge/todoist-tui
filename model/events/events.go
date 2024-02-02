@@ -9,35 +9,38 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/samber/lo"
+	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
 type Model struct {
 	Events []Event
+	Ctx    ctx.Context
 }
 
 type Event struct {
 	Timer   timer.Model
+	Timeout bool
 	Message string
 	Style   lipgloss.Style
-	Quit    bool
 }
 
 type NewMessage struct {
-	Timeout time.Duration
-	Message string
-	Style   lipgloss.Style
-	Quit    bool
+	Timeout  bool
+	Duration time.Duration
+	Message  string
+	Style    lipgloss.Style
 }
 
-func (m *Model) Publish(message string, style lipgloss.Style, timeout time.Duration, quit bool) tea.Cmd {
+func (m *Model) Publish(message string, style lipgloss.Style, timeout bool, duration time.Duration) tea.Cmd {
 	return func() tea.Msg {
-		return NewMessage{timeout, message, style, quit}
+		return NewMessage{timeout, duration, message, style}
 	}
 }
 
-func New() *Model {
+func New(ctx ctx.Context) *Model {
 	return &Model{
 		Events: []Event{},
+		Ctx:    ctx,
 	}
 }
 
@@ -49,17 +52,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case NewMessage:
-		log.Printf("events - NewMessage timeout %v", msg.Timeout.Seconds())
-		timer := timer.New(msg.Timeout)
+		log.Printf("events - NewMessage timeout %v", msg.Duration.Seconds())
+		timer := timer.New(msg.Duration)
 		event := Event{
 			Message: msg.Message,
 			Style:   msg.Style,
 			Timer:   timer,
-			Quit:    msg.Quit,
 		}
 		m.Events = append(m.Events, event)
-		cmd := m.Events[len(m.Events)-1].Timer.Init()
-		cmds = append(cmds, cmd)
+		if event.Timeout {
+			cmd := m.Events[len(m.Events)-1].Timer.Init()
+			cmds = append(cmds, cmd)
+		}
 	case timer.TickMsg:
 		for i, event := range m.Events {
 			if event.Timer.ID() == msg.ID {
@@ -69,16 +73,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		}
 	case timer.TimeoutMsg:
+		m.Ctx.Logger.Info("timeout")
 		m.Events = lo.Filter(m.Events, func(e Event, _ int) bool {
 			return e.Timer.ID() != msg.ID
 		})
 		return m, nil
-	}
-	quit := lo.Filter(m.Events, func(e Event, _ int) bool {
-		return e.Quit == true
-	})
-	if len(quit) > 0 {
-		return m, tea.Quit
 	}
 	return m, tea.Batch(cmds...)
 }

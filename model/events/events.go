@@ -1,7 +1,6 @@
 package events
 
 import (
-	"log"
 	"strings"
 	"time"
 
@@ -52,7 +51,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case NewMessage:
-		log.Printf("events - NewMessage timeout %v", msg.Duration.Seconds())
+		m.Ctx.Logger.Infof("events - NewMessage timeout %v", msg.Duration.Seconds())
 		timer := timer.New(msg.Duration)
 		event := Event{
 			Message: msg.Message,

@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -110,6 +111,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = false
 		m.state = msg.state
+		m.labels = msg.state.Labels
+		m.projects = msg.state.Projects
 		tasks := lo.Filter(m.state.Items, func(i *types.Item, _ int) bool {
 			return i.ProjectId == m.state.Projects[0].Id
 		})
@@ -118,16 +121,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.taskCreate, cmd = m.taskCreate.Update(msg)
 		return m, cmd
 	case project_view.UpdateTaskMsg:
 		m.projectView.SetFocused(false)
+		labels := lo.Filter(m.labels, func(l *types.Label, _ int) bool {
+			return slices.Contains(msg.Task.Labels, l.Name)
+		})
 		newModel := task_create.New(
 			m.ctx,
 			task_create.WithTask(&msg.Task),
 			task_create.WithParentProject(m.projectView.Project()),
 			task_create.WithProjects(m.projects),
-			task_create.WithLabels(m.labels),
+			task_create.WithLabels(labels),
 			task_create.WithPossibleLabels(m.labels),
 		)
 		m.taskCreate = *newModel

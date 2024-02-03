@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
 /* Keymaps and help */
@@ -117,6 +118,7 @@ func NewPickerItem(elements []interface{}) []PickerItem {
 /* Model, constructor, and options */
 
 type Model struct {
+	ctx               ctx.Context
 	focused           bool
 	textInput         textinput.Model
 	requiredSelection int
@@ -136,7 +138,6 @@ type Model struct {
 type ModelOption func(*Model)
 
 func InitTextInput(items []PickerItem) textinput.Model {
-	log.Printf("items are %v", items)
 	suggestions := make([]string, len(items))
 	for i, item := range items {
 		suggestions[i] = item.Render()
@@ -155,7 +156,7 @@ func (m *Model) UpdateSuggestions(items []PickerItem) {
 	m.textInput.SetSuggestions(suggestions)
 }
 
-func NewModel(opts ...ModelOption) *Model {
+func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	const (
 		defaultLabel             = "Items"
 		defaultMultipleSelection = true
@@ -175,6 +176,7 @@ func NewModel(opts ...ModelOption) *Model {
 	defaultItems := []PickerItem{}
 
 	model := &Model{
+		ctx:               ctx,
 		items:             defaultItems,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
@@ -255,7 +257,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	log.Printf("In picker update")
+	m.ctx.Logger.Infof("In picker update")
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -265,14 +267,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 		case key.Matches(msg, m.keys.New):
 			if !m.textInput.Focused() {
-				log.Printf("Got the a key")
+				m.ctx.Logger.Infof("Got the a key")
 				m.textInputVisible = true
 				m.textInput.Focus()
 				return m, nil
 			}
 		case key.Matches(msg, m.keys.CancelInput):
 			if m.textInputVisible && m.textInput.Focused() {
-				log.Printf("Got cancel input command, unfocusing")
+				m.ctx.Logger.Infof("Got cancel input command, unfocusing")
 				m.textInput.SetValue("")
 				m.textInputVisible = false
 				m.textInput.Blur()
@@ -280,10 +282,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Confirm):
 			value := m.textInput.Value()
-			log.Printf("Confirm key %s", value)
+			m.ctx.Logger.Infof("Confirm key %s", value)
 			// If the value matches something
 			if containsRenderedItem(m.items, value) {
-				log.Printf("items contains value")
+				m.ctx.Logger.Infof("items contains value")
 				if containsRenderedItem(m.selectedItems, value) {
 					m.Deselect(value)
 				} else {
@@ -302,11 +304,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 	if m.textInput.Focused() {
 		log.Println("Text input is focused, running update")
-		log.Printf("Message is %v", msg)
+		m.ctx.Logger.Infof("Message is %v", msg)
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
-	log.Printf("I'm returning from update")
+	m.ctx.Logger.Infof("I'm returning from update")
 	return m, tea.Batch(cmds...)
 }
 
@@ -431,4 +433,12 @@ func (m *Model) SetSelected(items []PickerItem) {
 
 func (m *Model) SetHelp(help bool) {
 	m.help.ShowAll = help
+}
+
+func ToPickerItem[T PickerItem](items []T) []PickerItem {
+	pickerItems := make([]PickerItem, len(items))
+	for i, item := range items {
+		pickerItems[i] = item
+	}
+	return pickerItems
 }

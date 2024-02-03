@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -120,7 +119,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	defaultLabels := []picker.PickerItem{}
 	defaultPriorities := []picker.PickerItem{}
 
-	projects := picker.NewModel(
+	projects := picker.New(
+		ctx,
 		picker.WithItems(defaultProjects),
 		picker.WithLabel("Project"),
 		picker.WithMultipleSelection(false),
@@ -139,6 +139,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		// task_title.WithFocusedLabelStyle(focusedComponentLabelStyle),
 	)
 	descriptionModel := task_description.NewModel(
+		ctx.Logger,
 		// task_description.WithLabelStyle(componentLabelStyle),
 		// task_description.WithFocusedLabelStyle(focusedComponentLabelStyle),
 		task_description.WithValue("I need some bread from the store"),
@@ -148,7 +149,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		date_picker.WithDueDate(false),
 		date_picker.WithShowHelpUnderComponent(false),
 	)
-	labels := picker.NewModel(
+	labels := picker.New(
+		ctx,
 		picker.WithItems(defaultLabels),
 		picker.WithLabel("Labels"),
 		// picker.WithLabelStyle(componentLabelStyle),
@@ -156,7 +158,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		picker.WithPlaceholder("Enter a label"),
 	)
 
-	priority := picker.NewModel(
+	priority := picker.New(
+		ctx,
 		picker.WithLabel("Priority"),
 		picker.WithMultipleSelection(false),
 		picker.WithRequiredSelection(0),
@@ -165,7 +168,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 
 	// onSubmit := func(payload interface{}) tea.Cmd {
 	// 	// return func() tea.Msg {
-	// 	// 	log.Printf("onSubmit defined by the parent")
+	// 	// 	m.ctx.Logger.Info("onSubmit defined by the parent")
 	// 	// 	c := sync.NewClient(nil).WithAuthToken(os.Getenv("TODOIST_API_TOKEN"))
 	// 	// 	task, err := c.UpdateTask(context.Background(), sync.UpdateItemArgs{
 	// 	//       Id: model.
@@ -215,7 +218,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		labelItems := make([]picker.PickerItem, 0)
 		for _, label := range model.taskLabels {
 			if slices.Contains(model.task.Labels, label.Name) {
-				log.Printf("Adding label %v", label)
+				ctx.Logger.Info("Adding label %v", label)
 				label := *label
 				labelItems = append(labelItems, label)
 			}
@@ -223,12 +226,12 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		model.labels.SetSelected(labelItems)
 		model.priority.SetSelected([]picker.PickerItem{types.Priority(model.task.Priority)})
 		if model.task.Due != nil {
-			log.Printf("Due date isn't nil")
+			ctx.Logger.Info("Due date isn't nil")
 			if dd, err := time.Parse(time.RFC3339, model.task.Due.Date); err != nil {
-				log.Printf("Didn't parse me a due date")
+				ctx.Logger.Info("Didn't parse me a due date")
 				model.dueDate.SetNaturalLanguageDueDate(model.task.Due.String)
 			} else {
-				log.Printf("Parsed me a due date, setting to %v", dd)
+				ctx.Logger.Info("Parsed me a due date, setting to %v", dd)
 				model.dueDate.SetAbsoluteDueDate(dd.In(time.Local))
 			}
 		}
@@ -369,11 +372,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	case button.SubmitMsg:
-		log.Printf("Parent got the SubmitMsg from the child")
+		m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
 		m.showSpinner = true
 		return m, m.UpdateTask()
 	case ItemUpdatedMsg:
-		log.Printf("Item updated msg %v %v", msg.Task, msg.Error)
+		m.ctx.Logger.Info("Item updated msg %v %v", msg.Task, msg.Error)
 		var event events.NewMessage
 		if msg.Error == nil {
 			event = events.NewMessage{
@@ -400,15 +403,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	// x, y := m.focusedStyle.GetFrameSize()
 	// 	return m, commands.NotifyResize(m.width, m.height, x, y)
 	// case commands.ResizeChildMessage:
-	// 	log.Println("Got resizechild message")
+	// 	m.ctx.Logger.Info("Got resizechild message")
 	// 	m, cmd = m.Resize(msg)
 	// 	cmds = append(cmds, cmd)
 	// case timer.TickMsg:
-	// 	log.Printf("Task create tick msg")
+	// 	m.ctx.Logger.Info("Task create tick msg")
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Help):
-			log.Printf("Got help")
+			m.ctx.Logger.Info("Got help")
 			m.help.ShowAll = !m.help.ShowAll
 			// We are intercepting the child components help commands and not
 			// delegating to them
@@ -417,28 +420,26 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.ScrollDown):
-			log.Printf("Scroll request, focused is %d", m.focused)
+			m.ctx.Logger.Info("Scroll request, focused is %d", m.focused)
 			if m.focused != lastSection {
 				m.HandleScrollDown()
 			}
 		case key.Matches(msg, m.keys.ScrollUp):
-			log.Printf("Scroll request, focused is %d", m.focused)
+			m.ctx.Logger.Info("Scroll request, focused is %d", m.focused)
 			if m.focused > 0 {
 				m.HandleScrollUp()
 			}
 		}
 	}
 
-	log.Printf("In switch focused")
 	switch m.focused {
 	case titleSection:
-		log.Printf("Title section is focused")
 		m.title.FocusOn()
 		m.title, cmd = m.title.Update(msg)
 		cmds = append(cmds, cmd)
 	case projectSection:
 		m.project.FocusOn()
-		log.Printf("projects are focused")
+		m.ctx.Logger.Info("projects are focused")
 		m.project, cmd = m.project.Update(msg)
 		cmds = append(cmds, cmd)
 	case dueSection:
@@ -446,18 +447,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.dueDate, cmd = m.dueDate.Update(msg)
 		cmds = append(cmds, cmd)
 	case descriptionSection:
-		log.Println("Description is focused")
+		m.ctx.Logger.Info("Description is focused")
 		m.description, cmd = m.description.Update(msg)
 		cmds = append(cmds, cmd)
 	case labelsSection:
-		log.Println("Labels are focused")
+		m.ctx.Logger.Info("Labels are focused")
 		m.labels, cmd = m.labels.Update(msg)
 		cmds = append(cmds, cmd)
 	case prioritySection:
 		m.priority, cmd = m.priority.Update(msg)
 		cmds = append(cmds, cmd)
 	case submitSection:
-		log.Printf("Submit focused")
+		m.ctx.Logger.Info("Submit focused")
 		m.submit, cmd = m.submit.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -624,7 +625,7 @@ func (m *Model) diff() (*sync.UpdateItemArgs, error) {
 		args.Description = m.description.GetContent()
 	}
 	dueDate := m.dueDate.GetContent()
-	log.Printf("duedate %v\n", dueDate)
+	m.ctx.Logger.Info("duedate %v\n", dueDate)
 	switch {
 	case dueDate.HasDueDate && dueDate.HumanInputDate != "":
 		args.Due = &types.DueDate{}

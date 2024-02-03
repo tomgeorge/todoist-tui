@@ -8,9 +8,11 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"go.uber.org/zap"
 )
 
 type Model struct {
+	logger            *zap.SugaredLogger
 	focused           bool
 	label             string
 	labelStyle        lipgloss.Style
@@ -54,7 +56,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 type ModelOption func(*Model)
 
-func NewModel(opts ...ModelOption) *Model {
+func NewModel(logger *zap.SugaredLogger, opts ...ModelOption) *Model {
 	const (
 		defaultLabel = "Description"
 	)
@@ -70,6 +72,7 @@ func NewModel(opts ...ModelOption) *Model {
 	input := textarea.New()
 	input.ShowLineNumbers = false
 	model := &Model{
+		logger:            logger,
 		focused:           false,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
@@ -126,16 +129,16 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	log.Println("In description update")
+	m.logger.Info("In description update")
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		log.Printf("Setting width")
+		m.logger.Info("Setting width")
 		m.input.SetWidth(msg.Width)
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Help):
-			log.Printf("Setting showall title")
+			m.logger.Info("Setting showall title")
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Edit) && !m.input.Focused():

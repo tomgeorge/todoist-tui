@@ -70,8 +70,9 @@ func (p Project) Render() string {
 func (p Project) Style() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Background(lipgloss.Color(Colors[p.Color])).
-		MarginRight(1).
-		MarginTop(1)
+		Foreground(lipgloss.AdaptiveColor{Dark: "#000000", Light: "#ffffff"}).
+		MarginRight(1)
+	// MarginTop(1)
 }
 
 func (p Project) GetFormData() interface{} {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path"
 
@@ -20,6 +21,7 @@ func SetDefaults() error {
 		return err
 	}
 	defaultLogPath := path.Join(userCacheDir, "todoist-tui.log")
+	fmt.Println(defaultLogPath)
 	viper.SetDefault("log", defaultLogPath)
 	return nil
 }

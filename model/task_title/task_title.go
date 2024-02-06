@@ -1,21 +1,22 @@
 package task_title
 
 import (
-	"log"
-
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	textinput "github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
 type Model struct {
+	ctx               ctx.Context
 	focused           bool
 	editing           bool
 	label             string
-	spacingStyle      lipgloss.Style
 	labelStyle        lipgloss.Style
+	focusedStyle      lipgloss.Style
+	blurredStyle      lipgloss.Style
 	focusedLabelStyle lipgloss.Style
 	textinput         textinput.Model
 	promptStyle       lipgloss.Style
@@ -61,7 +62,7 @@ type ModelOption func(*Model)
 // Create a new title model
 // Accepts a number of options to set labels,
 // initial content, styles, etc
-func New(opts ...ModelOption) *Model {
+func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	const (
 		defaultLabel   = "Title"
 		defaultFocused = false
@@ -77,21 +78,24 @@ func New(opts ...ModelOption) *Model {
 		Italic(true).
 		Bold(true)
 
-	defaultSpacingStyle := lipgloss.NewStyle().
+	defaultFocusedStyle := lipgloss.NewStyle().
 		MarginBottom(1)
+	defaultBlurredStyle := defaultFocusedStyle.Copy()
 
 	textinput := textinput.New()
 
 	model := &Model{
+		ctx:               ctx,
 		focused:           defaultFocused,
 		editing:           defaultEditing,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
 		focusedLabelStyle: defaultFocusedLabelStyle,
-		spacingStyle:      defaultSpacingStyle,
 		textinput:         textinput,
 		textStyle:         textinput.TextStyle,
 		promptStyle:       textinput.PromptStyle,
+		blurredStyle:      defaultBlurredStyle,
+		focusedStyle:      defaultFocusedStyle,
 		help:              help.New(),
 		keys:              defaultKeyMap,
 	}
@@ -120,9 +124,15 @@ func WithFocusedLabelStyle(labelStyle lipgloss.Style) ModelOption {
 	}
 }
 
-func WithSpacingStyle(labelStyle lipgloss.Style) ModelOption {
+func WithFocusedStyle(focusedStyle lipgloss.Style) ModelOption {
 	return func(m *Model) {
-		m.spacingStyle = labelStyle
+		m.focusedStyle = focusedStyle
+	}
+}
+
+func WithBlurredStyle(blurredStyle lipgloss.Style) ModelOption {
+	return func(m *Model) {
+		m.blurredStyle = blurredStyle
 	}
 }
 
@@ -148,6 +158,10 @@ func (m *Model) Focused() bool {
 	return m.focused
 }
 
+func (m *Model) SetFocused(focused bool) {
+	m.focused = focused
+}
+
 func (m *Model) Editing() bool {
 	return m.focused && m.textinput.Focused()
 }
@@ -164,6 +178,7 @@ func (m *Model) SetHelp(help bool) {
 func (m *Model) updateTextInputState() {
 	if m.editing {
 		m.textinput.Focus()
+		m.textinput.CursorEnd()
 	} else {
 		m.textinput.Blur()
 	}
@@ -204,7 +219,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Help) && !m.Editing():
-			log.Printf("Setting showall title")
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Edit) && !m.Editing():
@@ -225,15 +239,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 func (m Model) View() string {
 	sections := []string{}
 	switch {
-	case m.Editing():
+	case m.Focused() && m.Editing():
 		sections = append(sections, m.focusedLabelStyle.Render(m.label))
 		sections = append(sections, m.textinput.View())
-	case !m.Editing():
+	case m.Focused() && !m.Editing():
 		sections = append(sections, m.focusedLabelStyle.Render(m.label))
 		sections = append(sections, m.textinput.Value())
 	default:
 		sections = append(sections, m.labelStyle.Render(m.label))
 		sections = append(sections, m.textinput.Value())
 	}
-	return m.spacingStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	if m.Focused() {
+		return m.focusedStyle.Render(content)
+	}
+	return m.blurredStyle.Render(content)
 }

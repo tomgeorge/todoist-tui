@@ -2,13 +2,13 @@ package picker
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
@@ -131,6 +131,8 @@ type Model struct {
 	labelStyle        lipgloss.Style
 	focusedLabelStyle lipgloss.Style
 	validationStyle   lipgloss.Style
+	focusedStyle      lipgloss.Style
+	blurredStyle      lipgloss.Style
 	multipleSelection bool
 	help              help.Model
 }
@@ -171,6 +173,9 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		Bold(true).
 		Italic(true)
 
+	defaultFocusedStyle := lipgloss.NewStyle().PaddingLeft(1)
+	defaultBlurredStyle := lipgloss.NewStyle().PaddingLeft(1).Copy()
+
 	defaultValidationStyle := defaultFocusedLabelStyle.Copy()
 
 	defaultItems := []PickerItem{}
@@ -181,6 +186,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
 		focusedLabelStyle: defaultFocusedLabelStyle,
+		focusedStyle:      defaultFocusedStyle,
+		blurredStyle:      defaultBlurredStyle,
 		validationStyle:   defaultValidationStyle,
 		help:              help.New(),
 		textInput:         InitTextInput(defaultItems),
@@ -223,6 +230,18 @@ func WithLabelStyle(labelStyle lipgloss.Style) ModelOption {
 func WithFocusedLabelStyle(labelStyle lipgloss.Style) ModelOption {
 	return func(m *Model) {
 		m.focusedLabelStyle = labelStyle
+	}
+}
+
+func WithFocusedStyle(focusedStyle lipgloss.Style) ModelOption {
+	return func(m *Model) {
+		m.focusedStyle = focusedStyle
+	}
+}
+
+func WithBlurredStyle(blurredStyle lipgloss.Style) ModelOption {
+	return func(m *Model) {
+		m.blurredStyle = blurredStyle
 	}
 }
 
@@ -303,7 +322,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	}
 	if m.textInput.Focused() {
-		log.Println("Text input is focused, running update")
 		m.ctx.Logger.Infof("Message is %v", msg)
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
@@ -329,13 +347,21 @@ func (m Model) View() string {
 	}
 	if m.showAvailable {
 		sections = append(sections, lipgloss.NewStyle().Bold(true).MarginTop(1).Render("Available:"))
-		sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Left, m.styledItems(m.label, m.items)...))
+		sections = append(sections,
+			wordwrap.String(
+				lipgloss.JoinHorizontal(lipgloss.Left, m.styledItems(m.label, m.items)...),
+				50,
+			),
+		)
 	}
 	if m.focused && m.requiredSelection > 0 && len(m.selectedItems) != m.requiredSelection {
 		sections = append(sections, m.validationStyle.Render(fmt.Sprintf("This section requires %d selection(s)", m.requiredSelection)))
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	if m.focused {
+		return m.focusedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	}
+	return m.blurredStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
 
 // Select the item in model.items indicated by value

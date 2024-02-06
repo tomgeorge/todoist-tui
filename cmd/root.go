@@ -12,6 +12,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/model"
 	"github.com/tomgeorge/todoist-tui/services/sync"
+	"github.com/tomgeorge/todoist-tui/theme"
 	"go.uber.org/zap"
 )
 
@@ -82,7 +83,7 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading logger: %v", err)
 	}
 	client := sync.NewClient(nil).WithAuthToken(viper.GetString("api-token"))
-	ctx := ctx.New(&config, logger.Sugar(), client)
+	ctx := ctx.New(&config, logger.Sugar(), client).WithTheme(theme.ThemeCatppuccin())
 	model := model.New(ctx)
 	p := tea.NewProgram(model)
 

@@ -1,11 +1,17 @@
 package project_view
 
 import (
+	"slices"
+
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/samber/lo"
+	"github.com/tomgeorge/todoist-tui/ctx"
+	"github.com/tomgeorge/todoist-tui/messages"
+	"github.com/tomgeorge/todoist-tui/model/task_create"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
@@ -51,18 +57,21 @@ var defaultKeys = keyMap{
 }
 
 type Model struct {
-	help       help.Model
-	keys       keyMap
-	project    *types.Project
-	tasks      []*types.Item
-	titleStyle lipgloss.Style
-	list       list.Model
-	focused    bool
+	ctx         ctx.Context
+	help        help.Model
+	keys        keyMap
+	project     *types.Project
+	tasks       []*types.Item
+	allLabels   []*types.Label
+	allProjects []*types.Project
+	titleStyle  lipgloss.Style
+	list        list.Model
+	focused     bool
 }
 
 type ModelOption func(m *Model)
 
-func New(project *types.Project, tasks []*types.Item, opts ...ModelOption) *Model {
+func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []*types.Label, projects []*types.Project, opts ...ModelOption) *Model {
 	var (
 		defaultTitleStyle = lipgloss.NewStyle().Bold(true).Underline(true)
 	)
@@ -76,12 +85,15 @@ func New(project *types.Project, tasks []*types.Item, opts ...ModelOption) *Mode
 	list := list.New(items, delegate, 50, 50)
 	list.Title = project.Name
 	m := &Model{
-		help:       help.New(),
-		keys:       defaultKeys,
-		tasks:      tasks,
-		project:    project,
-		titleStyle: defaultTitleStyle,
-		list:       list,
+		ctx:         ctx,
+		help:        help.New(),
+		keys:        defaultKeys,
+		tasks:       tasks,
+		project:     project,
+		allLabels:   labels,
+		allProjects: projects,
+		titleStyle:  defaultTitleStyle,
+		list:        list,
 	}
 	return m
 }
@@ -90,17 +102,7 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-type UpdateTaskMsg struct {
-	Task types.Item
-}
-
-func UpdateTask(task *types.Item) tea.Cmd {
-	return func() tea.Msg {
-		return UpdateTaskMsg{*task}
-	}
-}
-
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -111,7 +113,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !ok {
 				return m, nil
 			}
-			return m, UpdateTask(selected)
+			labels := lo.Filter(m.allLabels, func(l *types.Label, _ int) bool {
+				return slices.Contains(selected.Labels, l.Name)
+			})
+			taskModel := task_create.New(
+				m.ctx,
+				task_create.WithTask(selected),
+				task_create.WithParentProject(m.project),
+				task_create.WithLabels(labels),
+				task_create.WithPossibleLabels(m.allLabels),
+				task_create.WithProjects(m.allProjects),
+				// task_create.WithFocusedStyle(m.ctx.Theme.Focused.Base),
+			)
+			return m, messages.Push("task_create", taskModel)
 		}
 	}
 	var cmd tea.Cmd
@@ -121,16 +135,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m Model) View() string {
 	sections := []string{}
-	// title := lipgloss.JoinVertical(lipgloss.Center, fmt.Sprintf("%s\n", m.project.Style().Copy().Bold(true).Render(m.project.Name)))
-	// sections = append(sections, title)
-	// for _, task := range m.tasks {
-	// 	sections = append(sections, task.Content)
-	// }
 	sections = append(sections, m.list.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-func (m Model) SetFocused(focused bool) {
+func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
 }
 

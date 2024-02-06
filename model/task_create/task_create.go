@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tomgeorge/todoist-tui/ctx"
+	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/date_picker"
 	"github.com/tomgeorge/todoist-tui/model/events"
@@ -27,10 +28,13 @@ import (
 )
 
 type keyMap struct {
-	ScrollUp   key.Binding
-	ScrollDown key.Binding
-	Help       key.Binding
-	Quit       key.Binding
+	ScrollUp    key.Binding
+	ScrollDown  key.Binding
+	ScrollLeft  key.Binding
+	ScrollRight key.Binding
+	Help        key.Binding
+	Quit        key.Binding
+	Back        key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -39,7 +43,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.ScrollDown, k.ScrollUp, k.Quit},
+		{k.ScrollDown, k.ScrollUp, k.ScrollLeft, k.ScrollRight, k.Quit},
 		{k.Help},
 	}
 }
@@ -53,6 +57,14 @@ var defaultKeys = keyMap{
 		key.WithKeys("ctrl+j", "down"),
 		key.WithHelp("ctrl+j", "scroll down"),
 	),
+	ScrollLeft: key.NewBinding(
+		key.WithKeys("ctrl+h", "left"),
+		key.WithHelp("ctrl+h", "move left"),
+	),
+	ScrollRight: key.NewBinding(
+		key.WithKeys("ctrl+l", "right"),
+		key.WithHelp("ctrl+l", "move right"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("ctrl+_"),
 		key.WithHelp("ctrl+?", "help"),
@@ -60,6 +72,10 @@ var defaultKeys = keyMap{
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
 		key.WithHelp("ctrl+c", "quit"),
+	),
+	Back: key.NewBinding(
+		key.WithKeys("backsapce"),
+		key.WithKeys("backspace", "back/cancel"),
 	),
 }
 
@@ -69,6 +85,7 @@ type Model struct {
 	focusedStyle  lipgloss.Style
 	width         int
 	height        int
+	components    []tea.Model
 	project       picker.Model
 	title         task_title.Model
 	description   task_description.Model
@@ -76,6 +93,7 @@ type Model struct {
 	priority      picker.Model
 	dueDate       date_picker.Model
 	submit        button.Model
+	cancel        button.Model
 	events        events.Model
 	focused       Section
 	help          help.Model
@@ -97,7 +115,8 @@ const (
 	labelsSection
 	prioritySection
 	submitSection
-	lastSection   = submitSection
+	cancelSection
+	lastSection   = cancelSection
 	initialWidth  = 50
 	initialHeight = 50
 )
@@ -125,36 +144,50 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		picker.WithLabel("Project"),
 		picker.WithMultipleSelection(false),
 		picker.WithRequiredSelection(1),
-		// picker.WithSelected([]picker.PickerItem{defaultProjects[0]}),
-		// picker.WithLabelStyle(componentLabelStyle),
-		// picker.WithFocusedLabelStyle(focusedComponentLabelStyle),
+		picker.WithLabelStyle(ctx.Theme.Blurred.Title),
+		picker.WithFocusedLabelStyle(ctx.Theme.Focused.Title),
+		picker.WithFocusedStyle(ctx.Theme.Focused.Base),
+		picker.WithBlurredStyle(ctx.Theme.Blurred.Base),
 		picker.WithValidationStyle(validationStyle),
 		picker.WithPlaceholder("Select a project"),
 	)
 	titleModel := task_title.New(
-		task_title.WithLabel("Title"),
+		ctx,
+		task_title.WithLabel("Content"),
 		task_title.WithContent("Buy Bread"),
-		// task_title.WithTextStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#a12477"))),
-		// task_title.WithLabelStyle(componentLabelStyle),
-		// task_title.WithFocusedLabelStyle(focusedComponentLabelStyle),
+		task_title.WithFocusedLabelStyle(ctx.Theme.Focused.Title),
+		task_title.WithLabelStyle(ctx.Theme.Blurred.Title),
+		task_title.WithPromptStyle(ctx.Theme.Focused.TextInput.Prompt),
+		task_title.WithTextStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#c6d0f5"))),
+		task_title.WithFocusedStyle(ctx.Theme.Focused.Base),
+		task_title.WithBlurredStyle(ctx.Theme.Blurred.Base),
 	)
 	descriptionModel := task_description.NewModel(
 		ctx.Logger,
-		// task_description.WithLabelStyle(componentLabelStyle),
-		// task_description.WithFocusedLabelStyle(focusedComponentLabelStyle),
+		task_description.WithLabelStyle(ctx.Theme.Focused.Title),
+		task_description.WithFocusedLabelStyle(ctx.Theme.Blurred.Title),
+		task_description.WithFocusedStyle(ctx.Theme.Focused.Base),
+		task_description.WithBlurredStyle(ctx.Theme.Blurred.Base),
 		task_description.WithValue("I need some bread from the store"),
 	)
 	dueDate := date_picker.NewModel(
+		ctx,
 		date_picker.WithLabel("Due Date"),
 		date_picker.WithDueDate(false),
 		date_picker.WithShowHelpUnderComponent(false),
+		date_picker.WithLabelStyle(ctx.Theme.Focused.Title),
+		date_picker.WithFocusedLabelStyle(ctx.Theme.Blurred.Title),
+		date_picker.WithFocusedStyle(ctx.Theme.Focused.Base),
+		date_picker.WithBlurredStyle(ctx.Theme.Blurred.Base),
 	)
 	labels := picker.New(
 		ctx,
 		picker.WithItems(defaultLabels),
 		picker.WithLabel("Labels"),
-		// picker.WithLabelStyle(componentLabelStyle),
-		// picker.WithFocusedLabelStyle(focusedComponentLabelStyle),
+		picker.WithFocusedLabelStyle(ctx.Theme.Focused.Title),
+		picker.WithLabelStyle(ctx.Theme.Blurred.Title),
+		picker.WithFocusedStyle(ctx.Theme.Focused.Base),
+		picker.WithBlurredStyle(ctx.Theme.Blurred.Base),
 		picker.WithPlaceholder("Enter a label"),
 	)
 
@@ -164,22 +197,24 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		picker.WithMultipleSelection(false),
 		picker.WithRequiredSelection(0),
 		picker.WithItems(defaultPriorities),
+		picker.WithFocusedLabelStyle(ctx.Theme.Focused.Title),
+		picker.WithFocusedStyle(ctx.Theme.Focused.Base),
+		picker.WithBlurredStyle(ctx.Theme.Blurred.Base),
+		picker.WithLabelStyle(ctx.Theme.Blurred.Title),
 	)
 
-	// onSubmit := func(payload interface{}) tea.Cmd {
-	// 	// return func() tea.Msg {
-	// 	// 	m.ctx.Logger.Info("onSubmit defined by the parent")
-	// 	// 	c := sync.NewClient(nil).WithAuthToken(os.Getenv("TODOIST_API_TOKEN"))
-	// 	// 	task, err := c.UpdateTask(context.Background(), sync.UpdateItemArgs{
-	// 	//       Id: model.
-	// 	//     })
-	// 	// 	return ItemUpdatedMsg{task, err}
-	// 	// }
-	// }
 	submit := button.New(
 		button.WithText("Create Task"),
 		button.WithEnabled(true),
-		button.WithFocusedStyle(lipgloss.NewStyle().Background(lipgloss.Color("#a6d189")).Foreground(lipgloss.Color("#414559"))),
+		button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
+		button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+	)
+
+	cancel := button.New(
+		button.WithText("Cancel"),
+		button.WithEnabled(true),
+		button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
+		button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
 	)
 	events := events.New(ctx)
 
@@ -187,8 +222,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	model := &Model{
 		ctx:      ctx,
 		viewport: viewport,
-		focusedStyle: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder(), true),
+		// focusedStyle: lipgloss.NewStyle().
+		// 	Border(lipgloss.NormalBorder(), true),
 		title:         *titleModel,
 		project:       *projects,
 		dueDate:       *dueDate,
@@ -196,6 +231,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		priority:      *priority,
 		labels:        *labels,
 		submit:        *submit,
+		cancel:        *cancel,
 		focused:       titleSection,
 		help:          help.New(),
 		keys:          defaultKeys,
@@ -236,6 +272,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 			}
 		}
 	}
+
+	model.title.SetFocused(true)
 
 	return model
 }
@@ -324,6 +362,10 @@ func (m *Model) HandleScrollDown() {
 		m.priority.FocusOn()
 	case prioritySection:
 		m.priority.FocusOff()
+		m.submit.SetFocus(true)
+	case submitSection:
+		m.submit.SetFocus(false)
+		m.cancel.SetFocus(true)
 	}
 	m.focused++
 }
@@ -346,7 +388,11 @@ func (m *Model) HandleScrollUp() {
 		m.priority.FocusOff()
 		m.labels.FocusOn()
 	case submitSection:
+		m.submit.SetFocus(false)
 		m.priority.FocusOn()
+	case cancelSection:
+		m.cancel.SetFocus(false)
+		m.submit.SetFocus(true)
 	}
 	m.focused--
 }
@@ -363,73 +409,108 @@ func (m *Model) handleHelp() {
 	m.submit.SetHelp(m.help.ShowAll)
 }
 
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func handleWindowSize(model Model, msg tea.WindowSizeMsg) Model {
+	model.viewport.Width = msg.Width
+	model.viewport.Height = msg.Height
+	model.width = msg.Width
+	model.height = msg.Height
+	return model
+}
+
+func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
+	m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
+	m.showSpinner = true
+	if m.focused == submitSection {
+		return m, m.UpdateTask()
+	}
+	if m.focused == cancelSection {
+		return m, messages.Pop()
+	}
+	return m, nil
+}
+
+func handleItemUpdate(m Model, msg ItemUpdatedMsg) (Model, tea.Cmd) {
+	m.ctx.Logger.Info("Item updated msg %v %v", msg.Task, msg.Error)
+	var event events.NewMessage
+	if msg.Error == nil {
+		event = events.NewMessage{
+			Timeout:  true,
+			Duration: 5 * time.Second,
+			Message:  "Task updated successfully",
+			Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
+		}
+	} else {
+		event = events.NewMessage{
+			Timeout:  true,
+			Duration: 5 * time.Second,
+			Message:  msg.Error.Error(),
+			Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
+		}
+	}
+	m.showSpinner = false
+	return m, m.events.Publish(event.Message, event.Style, event.Timeout, event.Duration)
+}
+
+func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.ctx.Logger.Debug("got a backspace")
+		empty := sync.UpdateItemArgs{}
+		if diff, _ := m.diff(); reflect.DeepEqual(*diff, empty) {
+			m.ctx.Logger.Debug("Are you sure you want to quit?")
+		}
+		if !m.title.Editing() {
+			return m, messages.Pop()
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.Help):
+		m.ctx.Logger.Info("Got help")
+		m.help.ShowAll = !m.help.ShowAll
+		m.handleHelp()
+		return m, nil
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.ScrollDown):
+		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focused)
+		if m.focused != lastSection {
+			m.HandleScrollDown()
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.ScrollUp):
+		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focused)
+		if m.focused > 0 {
+			m.HandleScrollUp()
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.ScrollLeft):
+		if m.focused == cancelSection {
+			m.HandleScrollUp()
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.ScrollRight):
+		if m.focused == submitSection {
+			m.HandleScrollDown()
+		}
+		return m, nil
+	default:
+		return m, nil
+	}
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.ctx.Logger.Debug("task_create.Update")
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-	case *tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		return m, nil
 	case button.SubmitMsg:
-		m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
-		m.showSpinner = true
-		return m, m.UpdateTask()
+		return handleSubmit(m, msg)
 	case ItemUpdatedMsg:
-		m.ctx.Logger.Info("Item updated msg %v %v", msg.Task, msg.Error)
-		var event events.NewMessage
-		if msg.Error == nil {
-			event = events.NewMessage{
-				Duration: 10 * time.Second,
-				Message:  "Task updated successfully",
-				Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
-			}
-		} else {
-			event = events.NewMessage{
-				Duration: 10 * time.Second,
-				Message:  msg.Error.Error(),
-				Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
-			}
-		}
-		m.showSpinner = false
-		events, cmd := m.events.Update(event)
-		m.events = events
-		return m, cmd
+		return handleItemUpdate(m, msg)
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height
-		m.width = msg.Width
-		m.height = msg.Height
-	// x, y := m.focusedStyle.GetFrameSize()
-	// 	return m, commands.NotifyResize(m.width, m.height, x, y)
-	// case commands.ResizeChildMessage:
-	// 	m.ctx.Logger.Info("Got resizechild message")
-	// 	m, cmd = m.Resize(msg)
-	// 	cmds = append(cmds, cmd)
-	// case timer.TickMsg:
-	// 	m.ctx.Logger.Info("Task create tick msg")
+		return handleWindowSize(m, msg), nil
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Help):
-			m.ctx.Logger.Info("Got help")
-			m.help.ShowAll = !m.help.ShowAll
-			// We are intercepting the child components help commands and not
-			// delegating to them
-			m.handleHelp()
-			return m, nil
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.ScrollDown):
-			m.ctx.Logger.Info("Scroll request, focused is %d", m.focused)
-			if m.focused != lastSection {
-				m.HandleScrollDown()
-			}
-		case key.Matches(msg, m.keys.ScrollUp):
-			m.ctx.Logger.Info("Scroll request, focused is %d", m.focused)
-			if m.focused > 0 {
-				m.HandleScrollUp()
-			}
-		}
+		m, cmd = handleKeyPress(m, msg)
+		cmds = append(cmds, cmd)
 	}
 
 	switch m.focused {
@@ -460,6 +541,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case submitSection:
 		m.ctx.Logger.Info("Submit focused")
 		m.submit, cmd = m.submit.Update(msg)
+		cmds = append(cmds, cmd)
+	case cancelSection:
+		m.ctx.Logger.Info("Submit focused")
+		m.submit, cmd = m.cancel.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	m.events, cmd = m.events.Update(msg)
@@ -560,13 +645,22 @@ func renderTaskContent(t types.CreateTaskRequest) string {
 
 func (m Model) View() string {
 	sections := []string{}
+	var (
+	// titleSelected = m.focused == titleSection
+	)
 	sections = append(sections, m.renderContent(titleSelected, true, m.title.View()))
 	sections = append(sections, m.renderContent(projectsSelected, true, m.project.View()))
 	sections = append(sections, m.renderContent(dueDateSelected, true, m.dueDate.View()))
 	sections = append(sections, m.renderContent(descriptionSelected, true, m.description.View()))
 	sections = append(sections, m.renderContent(labelsSelected, true, m.labels.View()))
 	sections = append(sections, m.renderContent(prioritySelected, true, m.priority.View()))
-	sections = append(sections, m.renderContent(submitSelected, false, m.submit.View()))
+	sections = append(sections,
+		lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			m.renderContent(submitSelected, false, m.submit.View()),
+			m.renderContent(func(m *Model) bool { return m.focused == cancelSection }, false, m.cancel.View()),
+		),
+	)
 
 	switch m.focused {
 	case titleSection:
@@ -625,7 +719,6 @@ func (m *Model) diff() (*sync.UpdateItemArgs, error) {
 		args.Description = m.description.GetContent()
 	}
 	dueDate := m.dueDate.GetContent()
-	m.ctx.Logger.Info("duedate %v\n", dueDate)
 	switch {
 	case dueDate.HasDueDate && dueDate.HumanInputDate != "":
 		args.Due = &types.DueDate{}
@@ -686,9 +779,8 @@ func equalIgnoreOrder[T comparable](s1 []T, s2 []T) bool {
 
 func (m *Model) UpdateTask() tea.Cmd {
 	return func() tea.Msg {
-		c := sync.NewClient(nil).WithAuthToken(os.Getenv("TODOIST_API_TOKEN"))
 		diff, _ := m.diff()
-		task, err := c.UpdateTask(context.Background(), *diff)
+		task, err := m.ctx.Client.UpdateTask(context.Background(), *diff)
 		return ItemUpdatedMsg{task, err}
 	}
 }

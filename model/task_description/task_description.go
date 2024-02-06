@@ -1,8 +1,6 @@
 package task_description
 
 import (
-	"log"
-
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -17,6 +15,8 @@ type Model struct {
 	label             string
 	labelStyle        lipgloss.Style
 	focusedLabelStyle lipgloss.Style
+	focusedStyle      lipgloss.Style
+	blurredStyle      lipgloss.Style
 	input             textarea.Model
 	help              help.Model
 	keys              keyMap
@@ -69,14 +69,21 @@ func NewModel(logger *zap.SugaredLogger, opts ...ModelOption) *Model {
 		Bold(true).
 		Italic(true)
 
+	defaultFocusedStyle := lipgloss.NewStyle().PaddingLeft(1)
+	defaultBlurredStyle := defaultFocusedStyle.Copy()
+
 	input := textarea.New()
 	input.ShowLineNumbers = false
+	input.Placeholder = "No description..."
+	input.Prompt = ""
 	model := &Model{
 		logger:            logger,
 		focused:           false,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
 		focusedLabelStyle: defaultFocusedLabelStyle,
+		focusedStyle:      defaultFocusedStyle,
+		blurredStyle:      defaultBlurredStyle,
 		input:             input,
 		help:              help.New(),
 		keys:              defaultKeyMap,
@@ -112,15 +119,15 @@ func WithFocusedLabelStyle(labelStyle lipgloss.Style) ModelOption {
 	}
 }
 
-func WithFocusedStyle(style textarea.Style) ModelOption {
+func WithFocusedStyle(style lipgloss.Style) ModelOption {
 	return func(m *Model) {
-		m.input.FocusedStyle = style
+		m.focusedStyle = style
 	}
 }
 
-func WithBlurredStyle(style textarea.Style) ModelOption {
+func WithBlurredStyle(style lipgloss.Style) ModelOption {
 	return func(m *Model) {
-		m.input.BlurredStyle = style
+		m.blurredStyle = style
 	}
 }
 
@@ -146,7 +153,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.StopEditing):
 			if m.input.Focused() {
-				log.Printf("Blurring")
 				m.input.Blur()
 			}
 		}
@@ -157,25 +163,50 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
+// FIXME: unsightly!
 func (m Model) View() string {
-	sections := []string{}
+	var content string
 	switch {
 	case m.focused && m.input.Focused():
-		sections = append(sections, m.focusedLabelStyle.Render(m.label))
-		sections = append(sections, m.input.View())
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.focusedLabelStyle.Render(m.label),
+			m.input.View(),
+		)
 	case m.focused && !m.input.Focused():
-		sections = append(sections, m.focusedLabelStyle.Render(m.label))
-		sections = append(sections, m.input.Value())
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.focusedLabelStyle.Render(m.label),
+			m.input.View(),
+		)
 	default:
-		sections = append(sections, m.labelStyle.Render(m.label))
-		sections = append(sections, m.input.Value())
+		// This would be super cool, maybe one day
+		// output, _ := glamour.Render(m.input.Value(), "dark")
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.labelStyle.Render(m.label),
+			m.input.View(),
+		)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	if m.focused {
+		return m.focusedStyle.Render(
+			lipgloss.JoinVertical(
+				lipgloss.Left,
+				content,
+			),
+		)
+	}
+	return m.blurredStyle.Render(lipgloss.JoinVertical(lipgloss.Left, content))
 }
 
 func (m *Model) Focused() bool {
 	return m.focused
 }
+
+func (m *Model) SetFocused(focused bool) {
+	m.focused = focused
+}
+
 func (m *Model) FocusOn() {
 	m.focused = true
 }

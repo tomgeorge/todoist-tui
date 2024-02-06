@@ -1,6 +1,7 @@
 package events
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -54,16 +55,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Ctx.Logger.Infof("events - NewMessage timeout %v", msg.Duration.Seconds())
 		timer := timer.New(msg.Duration)
 		event := Event{
+			Timeout: msg.Timeout,
 			Message: msg.Message,
 			Style:   msg.Style,
 			Timer:   timer,
 		}
+		m.Ctx.Logger.Infof("events - NewMessage timeout? %b", event.Timeout)
 		m.Events = append(m.Events, event)
 		if event.Timeout {
 			cmd := m.Events[len(m.Events)-1].Timer.Init()
 			cmds = append(cmds, cmd)
 		}
 	case timer.TickMsg:
+		m.Ctx.Logger.Debugf("tick for timer %v", msg.ID)
 		for i, event := range m.Events {
 			if event.Timer.ID() == msg.ID {
 				updated, cmd := event.Timer.Update(msg)
@@ -87,7 +91,7 @@ func (m Model) View() string {
 	}
 	var sb strings.Builder
 	for _, event := range m.Events {
-		sb.WriteString(event.Style.Render(event.Message))
+		sb.WriteString(fmt.Sprintf("%s %s\n", event.Style.Render(event.Message), event.Timer.Timeout))
 	}
 	return sb.String()
 }

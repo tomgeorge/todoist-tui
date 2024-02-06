@@ -29,6 +29,7 @@ func (l Label) Render() string {
 func (l Label) Style() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Background(lipgloss.Color(Colors[l.Color])).
-		MarginRight(1).
-		MarginTop(1)
+		Foreground(lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#000000"}).
+		MarginRight(1)
+	// MarginTop(1)
 }

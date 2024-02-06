@@ -1,7 +1,6 @@
 package date_picker
 
 import (
-	"log"
 	"strings"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
 type keyMap struct {
@@ -88,6 +88,7 @@ func (m Model) HelpKeys() help.KeyMap {
 }
 
 type Model struct {
+	ctx                    ctx.Context
 	editing                bool
 	hasDueDate             bool
 	focused                bool
@@ -97,6 +98,8 @@ type Model struct {
 	labelStyle             lipgloss.Style
 	focusedTextStyle       lipgloss.Style
 	textStyle              lipgloss.Style
+	focusedStyle           lipgloss.Style
+	blurredStyle           lipgloss.Style
 	label                  string
 	absoluteDueDate        time.Time
 	naturalLanguageDueDate textinput.Model
@@ -108,7 +111,7 @@ type Model struct {
 
 type ModelOption func(*Model)
 
-func NewModel(opts ...ModelOption) *Model {
+func NewModel(ctx ctx.Context, opts ...ModelOption) *Model {
 	const (
 		defaultFocused                = false
 		defaultEditing                = false
@@ -133,8 +136,13 @@ func NewModel(opts ...ModelOption) *Model {
 
 	defaultAbsoluteDate := time.Now().Local()
 
+	defaultFocusedStyle := lipgloss.NewStyle().PaddingLeft(1)
+
+	defaultBlurredStyle := defaultFocusedStyle.Copy()
+
 	defaultTextStyle := lipgloss.NewStyle()
 	model := &Model{
+		ctx:                    ctx,
 		focused:                defaultFocused,
 		editing:                defaultEditing,
 		absolute:               defaultAbsolute,
@@ -143,6 +151,8 @@ func NewModel(opts ...ModelOption) *Model {
 		focusedLabelStyle:      defaultFocusedLabelStyle,
 		focusedTextStyle:       defaultFocusedTextStyle,
 		labelStyle:             defaultLabelStyle,
+		focusedStyle:           defaultFocusedStyle,
+		blurredStyle:           defaultBlurredStyle,
 		textStyle:              defaultTextStyle,
 		label:                  defaultLabel,
 		absoluteDueDate:        defaultAbsoluteDate,
@@ -212,6 +222,18 @@ func WithFocusedTextStyle(focusedTextStyle lipgloss.Style) ModelOption {
 	}
 }
 
+func WithFocusedStyle(focusedStyle lipgloss.Style) ModelOption {
+	return func(m *Model) {
+		m.focusedStyle = focusedStyle
+	}
+}
+
+func WithBlurredStyle(blurredStyle lipgloss.Style) ModelOption {
+	return func(m *Model) {
+		m.blurredStyle = blurredStyle
+	}
+}
+
 func WithShowHelpUnderComponent(showHelpUnderComponent bool) ModelOption {
 	return func(m *Model) {
 		m.showHelpUnderComponent = showHelpUnderComponent
@@ -223,7 +245,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	log.Printf("DatePicker - Update - absolute %v\n", m.absoluteDueDate)
+	m.ctx.Logger.Infof("DatePicker - Update - absolute %v\n", m.absoluteDueDate)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -245,7 +267,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.naturalLanguageDueDate.Focus()
 			m.setEscapeBehavior()
 		case !m.hasDueDate && key.Matches(msg, m.keys.NewNaturalLanguageTodoOrEdit):
-			log.Println("no due date and got an A")
+			m.ctx.Logger.Info("no due date and got an A")
 			m.hasDueDate = true
 			m.naturalLanguageDueDate.Focus()
 			m.setAbsolute(false)
@@ -333,19 +355,17 @@ func (m *Model) setHasTime(hasTime bool) {
 func (m *Model) updateNavigationKeys() {
 	switch {
 	case !m.hasDueDate:
-		log.Println("No due date")
+		m.ctx.Logger.Info("No due date")
 		m.keys.MoveLeft.SetEnabled(false)
 		m.keys.MoveRight.SetEnabled(false)
 		m.keys.Increment.SetEnabled(false)
 		m.keys.Decrement.SetEnabled(false)
 		m.keys.StopEditingOrDisable.SetEnabled(false)
 		m.keys.NewNaturalLanguageTodoOrEdit.SetEnabled(true)
-		log.Printf("Setting newabsolutetodo to enabled")
 		m.keys.NewAbsoluteTodo.SetEnabled(true)
 		m.keys.NewNaturalLanguageTodoOrEdit.SetHelp("a", "set due date with natural language")
 		m.keys.ShowHoursAndMinutes.SetEnabled(false)
 	case m.absolute:
-		log.Println("enabling absolute keys")
 		m.keys.MoveLeft.SetEnabled(true)
 		m.keys.MoveRight.SetEnabled(true)
 		m.keys.Increment.SetEnabled(true)
@@ -353,10 +373,8 @@ func (m *Model) updateNavigationKeys() {
 		m.keys.ShowHoursAndMinutes.SetEnabled(true)
 		m.keys.StopEditingOrDisable.SetEnabled(true)
 		m.keys.NewNaturalLanguageTodoOrEdit.SetEnabled(false)
-		log.Printf("Setting newabsolutetodo to disabled")
 		m.keys.NewAbsoluteTodo.SetEnabled(false)
 	case !m.absolute:
-		log.Println("enabling human keys")
 		m.keys.MoveLeft.SetEnabled(false)
 		m.keys.MoveRight.SetEnabled(false)
 		m.keys.Increment.SetEnabled(false)
@@ -364,7 +382,6 @@ func (m *Model) updateNavigationKeys() {
 		m.keys.ShowHoursAndMinutes.SetEnabled(false)
 		m.keys.StopEditingOrDisable.SetEnabled(true)
 		m.keys.NewNaturalLanguageTodoOrEdit.SetEnabled(true)
-		log.Printf("Setting newabsolutetodo to disabled")
 		m.keys.NewAbsoluteTodo.SetEnabled(false)
 		m.keys.NewNaturalLanguageTodoOrEdit.SetHelp("a", "edit due date using natural language")
 	}
@@ -374,7 +391,6 @@ func (m *Model) updateNavigationKeys() {
 func (m *Model) setEscapeBehavior() {
 	switch {
 	case !m.absolute && m.naturalLanguageDueDate.Focused():
-		log.Printf("Setting escape to stop edit")
 		m.keys.StopEditingOrDisable.SetHelp("esc", "stop editing")
 	case !m.absolute && !m.naturalLanguageDueDate.Focused():
 		m.keys.StopEditingOrDisable.SetHelp("esc", "remove due date")
@@ -430,7 +446,7 @@ func (m Model) renderAbsoluteDate(sections []string) string {
 	if m.absolute {
 		var sb strings.Builder
 		for i, section := range sections {
-			if m.focusIndex == i {
+			if m.focused && m.focusIndex == i {
 				sb.WriteString(m.focusedTextStyle.Render(section))
 			} else {
 				sb.WriteString(m.textStyle.Render(section))
@@ -480,6 +496,7 @@ func (m *Model) FocusOff() {
 	m.focused = false
 }
 
+// FIXME - Unsightly!
 func (m Model) View() string {
 
 	var sections []string
@@ -495,29 +512,59 @@ func (m Model) View() string {
 	help := m.renderHelp()
 	if !m.hasDueDate {
 		if m.focused {
-			return lipgloss.JoinVertical(lipgloss.Left,
-				label,
-				"No due date",
-				"Press 'a' to set a natural language due date",
-				"Press 'd' to set an absolute due date",
-				help)
-
-		} else {
-			return lipgloss.JoinVertical(lipgloss.Left,
-				label,
-				"No due date")
+			return m.focusedStyle.Render(
+				lipgloss.JoinVertical(
+					lipgloss.Left,
+					label,
+					"No due date",
+					"Press 'a' to set a natural language due date",
+					"Press 'd' to set an absolute due date",
+					help,
+				),
+			)
 		}
+		return m.blurredStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				label,
+				"No due date"),
+		)
 	}
 	if m.absolute {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			label,
-			dateSection,
-			help)
+		if m.focused {
+			return m.focusedStyle.Render(
+				lipgloss.JoinVertical(
+					lipgloss.Left,
+					label,
+					dateSection,
+					help,
+				),
+			)
+		}
+		return m.blurredStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				label,
+				dateSection,
+				help,
+			),
+		)
 	} else {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			label,
-			naturalLanguageDueDateSection,
-			help)
+		if m.focused {
+			return m.focusedStyle.Render(
+				lipgloss.JoinVertical(
+					lipgloss.Left,
+					label,
+					naturalLanguageDueDateSection,
+					help,
+				),
+			)
+		}
+		return m.blurredStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				label,
+				naturalLanguageDueDateSection,
+				help,
+			),
+		)
 	}
 }
 

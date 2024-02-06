@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"log"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -21,7 +19,6 @@ type ResizeChildMessage struct {
 }
 
 func NotifyResize(x, y, px, py int) tea.Cmd {
-	log.Printf("Sending notify resize message")
 	return func() tea.Msg {
 		return ResizeChildMessage{
 			Width:             x,

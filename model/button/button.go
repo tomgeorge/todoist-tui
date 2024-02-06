@@ -1,8 +1,6 @@
 package button
 
 import (
-	"log"
-
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,12 +49,13 @@ type SubmitMsg struct {
 type Model struct {
 	text          string
 	enabled       bool
-	style         lipgloss.Style
+	blurredStyle  lipgloss.Style
 	focusedStyle  lipgloss.Style
 	disabledStyle lipgloss.Style
 	onSubmit      SubmitFn
 	help          help.Model
 	keys          keyMap
+	focused       bool
 }
 
 type ModelOption func(*Model)
@@ -74,19 +73,12 @@ func New(opts ...ModelOption) *Model {
 		return func() tea.Msg {
 			return SubmitMsg{}
 		}
-
-		log.Printf("Before return func, payload %v", payload)
-		return func() tea.Msg {
-			log.Printf("Evaluating submit function....")
-			log.Printf("Payload is %v", payload)
-			return nil
-		}
 	}
 
 	model := &Model{
 		text:          defaultText,
 		enabled:       defaultEnabled,
-		style:         defaultStyle,
+		blurredStyle:  defaultStyle,
 		focusedStyle:  defaultFocusedStyle,
 		disabledStyle: defaultDisabledStyle,
 		onSubmit:      defaultOnSubmit,
@@ -112,9 +104,9 @@ func WithEnabled(enabled bool) ModelOption {
 	}
 }
 
-func WithStyle(style lipgloss.Style) ModelOption {
+func WithBlurredStyle(blurredStyle lipgloss.Style) ModelOption {
 	return func(m *Model) {
-		m.style = style
+		m.blurredStyle = blurredStyle
 	}
 }
 
@@ -145,19 +137,21 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Confirm):
-			log.Printf("I hit submit")
 			return m, m.onSubmit("okey dokey")
 		}
-
 	}
 	return m, nil
 }
 
+func (m *Model) SetFocus(focused bool) {
+	m.focused = focused
+}
+
 func (m Model) View() string {
 	switch {
-	case m.enabled:
-		return m.focusedStyle.Render("[" + m.text + "]")
+	case m.focused:
+		return lipgloss.NewStyle().PaddingLeft(2).Render(m.focusedStyle.Render(m.text))
 	default:
-		return m.disabledStyle.Render("[" + m.text + "]")
+		return lipgloss.NewStyle().PaddingLeft(2).Render(m.blurredStyle.Render(m.text))
 	}
 }

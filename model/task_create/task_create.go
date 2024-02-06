@@ -544,7 +544,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case cancelSection:
 		m.ctx.Logger.Info("Submit focused")
-		m.submit, cmd = m.cancel.Update(msg)
+		m.cancel, cmd = m.cancel.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	m.events, cmd = m.events.Update(msg)

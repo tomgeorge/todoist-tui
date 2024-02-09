@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -78,6 +79,14 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("unmarshal config %v", err)
 	}
+
+	logDir := filepath.Dir(config.Log)
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(logDir, 0755); err != nil {
+			return err
+		}
+	}
+
 	logger, err := loadLogger(config.Log)
 	if err != nil {
 		return fmt.Errorf("loading logger: %v", err)

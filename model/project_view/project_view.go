@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
+	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
 	"github.com/tomgeorge/todoist-tui/types"
 )
@@ -66,6 +67,7 @@ type Model struct {
 	allProjects []*types.Project
 	titleStyle  lipgloss.Style
 	list        list.Model
+	create      *button.Model
 	focused     bool
 }
 
@@ -80,8 +82,11 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		items = append(items, task)
 	}
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Border(lipgloss.NormalBorder(), false, false, false, true).
-		Padding(0, 0, 0, 2)
+	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title
+	delegate.Styles.SelectedDesc = ctx.Theme.Focused.Title
+	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
+	delegate.Styles.NormalDesc = ctx.Theme.Blurred.Description
+
 	list := list.New(items, delegate, 50, 50)
 	list.Title = project.Name
 	m := &Model{
@@ -94,6 +99,12 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		allProjects: projects,
 		titleStyle:  defaultTitleStyle,
 		list:        list,
+		create: button.New(
+			button.WithText("Create Task"),
+			button.WithEnabled(true),
+			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
+			button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+		),
 	}
 	return m
 }
@@ -106,9 +117,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case msg.String() == "n":
+			// taskModel := task_create.New(
+			// 	m.ctx,
+			// 	task_create.WithParentProject(m.project),
+			// 	task_create.WithPossibleLabels(m.allLabels),
+			// 	task_create.WithProjects(m.allProjects),
+			// )
+			// return m, messages.Push("task_create", taskModel)
+			m.list.Select(-1)
+			m.create.SetFocus(true)
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Confirm):
+			if m.list.Index() == -1 {
+				taskModel := task_create.New(
+					m.ctx,
+					task_create.WithParentProject(m.project),
+					task_create.WithPossibleLabels(m.allLabels),
+					task_create.WithProjects(m.allProjects),
+				)
+				return m, messages.Push("task_create", taskModel)
+			}
 			selected, ok := m.list.SelectedItem().(*types.Item)
 			if !ok {
 				return m, nil
@@ -123,7 +153,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				task_create.WithLabels(labels),
 				task_create.WithPossibleLabels(m.allLabels),
 				task_create.WithProjects(m.allProjects),
-				// task_create.WithFocusedStyle(m.ctx.Theme.Focused.Base),
 			)
 			return m, messages.Push("task_create", taskModel)
 		}
@@ -135,6 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	sections := []string{}
+	sections = append(sections, m.ctx.Theme.Focused.Base.Render(m.create.View()))
 	sections = append(sections, m.list.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

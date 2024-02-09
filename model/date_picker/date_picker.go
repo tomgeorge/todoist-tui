@@ -1,6 +1,7 @@
 package date_picker
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type keyMap struct {
 	ShowHoursAndMinutes          key.Binding
 	StopEditingOrDisable         key.Binding
 	Help                         key.Binding
+	Debug                        key.Binding
 }
 
 var defaultKeyMap = keyMap{
@@ -66,6 +68,10 @@ var defaultKeyMap = keyMap{
 		key.WithKeys("?"),
 		key.WithHelp("?", "show help"),
 	),
+	Debug: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "Show debug information of focused component"),
+	),
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -75,7 +81,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.MoveRight, k.MoveLeft, k.Increment, k.Decrement, k.ShowHoursAndMinutes, k.NewAbsoluteTodo, k.NewNaturalLanguageTodoOrEdit, k.StopEditingOrDisable, k.SwitchInput},
-		{},
+		{k.Debug},
 	}
 }
 
@@ -89,6 +95,7 @@ func (m Model) HelpKeys() help.KeyMap {
 
 type Model struct {
 	ctx                    ctx.Context
+	debug                  bool
 	editing                bool
 	hasDueDate             bool
 	focused                bool
@@ -251,6 +258,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
+		case key.Matches(msg, m.keys.Debug):
+			m.debug = !m.debug
 		case key.Matches(msg, m.keys.SwitchInput):
 			m.setAbsolute(!m.absolute)
 		case m.absolute && key.Matches(msg, m.keys.MoveLeft):
@@ -269,18 +278,22 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case !m.hasDueDate && key.Matches(msg, m.keys.NewNaturalLanguageTodoOrEdit):
 			m.ctx.Logger.Info("no due date and got an A")
 			m.hasDueDate = true
+			m.editing = true
 			m.naturalLanguageDueDate.Focus()
 			m.setAbsolute(false)
 		case !m.hasDueDate && key.Matches(msg, m.keys.NewAbsoluteTodo):
 			m.hasDueDate = true
 			m.setAbsolute(true)
+			m.editing = false
 
 		case key.Matches(msg, m.keys.StopEditingOrDisable):
 			if !m.absolute && m.naturalLanguageDueDate.Focused() {
 				m.naturalLanguageDueDate.Blur()
+				m.editing = false
 				m.updateNavigationKeys()
 			} else {
 				m.hasDueDate = false
+				m.editing = false
 				m.updateNavigationKeys()
 			}
 		case msg.String() == "ctrl+c":
@@ -294,6 +307,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m Model) Editing() bool {
+	return m.editing
 }
 
 func (m *Model) moveLeft() {
@@ -496,6 +513,21 @@ func (m *Model) FocusOff() {
 	m.focused = false
 }
 
+func (m Model) DebugInfo() string {
+	return m.ctx.Theme.Help.FullDesc.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			fmt.Sprintf("focused %t", m.focused),
+			fmt.Sprintf("editing %t", m.editing),
+			fmt.Sprintf("hasDueDate %t", m.hasDueDate),
+			fmt.Sprintf("absolute due date %t", m.absolute),
+			fmt.Sprintf("has time %t", m.hasTime),
+			fmt.Sprintf("absoluteDueDate %s", m.absoluteDueDate.Format(time.RFC3339)),
+			fmt.Sprintf("natural language due date %s", m.naturalLanguageDueDate.Value()),
+		),
+	)
+}
+
 // FIXME - Unsightly!
 func (m Model) View() string {
 
@@ -510,9 +542,10 @@ func (m Model) View() string {
 	dateSection := m.renderAbsoluteDate(sections)
 	naturalLanguageDueDateSection := m.renderNaturalLanguageDueDate()
 	help := m.renderHelp()
+	var content string
 	if !m.hasDueDate {
 		if m.focused {
-			return m.focusedStyle.Render(
+			content = m.focusedStyle.Render(
 				lipgloss.JoinVertical(
 					lipgloss.Left,
 					label,
@@ -522,16 +555,17 @@ func (m Model) View() string {
 					help,
 				),
 			)
+		} else {
+			content = m.blurredStyle.Render(
+				lipgloss.JoinVertical(lipgloss.Left,
+					label,
+					"No due date"),
+			)
 		}
-		return m.blurredStyle.Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				label,
-				"No due date"),
-		)
 	}
 	if m.absolute {
 		if m.focused {
-			return m.focusedStyle.Render(
+			content = m.focusedStyle.Render(
 				lipgloss.JoinVertical(
 					lipgloss.Left,
 					label,
@@ -539,17 +573,18 @@ func (m Model) View() string {
 					help,
 				),
 			)
+		} else {
+			content = m.blurredStyle.Render(
+				lipgloss.JoinVertical(lipgloss.Left,
+					label,
+					dateSection,
+					help,
+				),
+			)
 		}
-		return m.blurredStyle.Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				label,
-				dateSection,
-				help,
-			),
-		)
 	} else {
 		if m.focused {
-			return m.focusedStyle.Render(
+			content = m.focusedStyle.Render(
 				lipgloss.JoinVertical(
 					lipgloss.Left,
 					label,
@@ -557,15 +592,21 @@ func (m Model) View() string {
 					help,
 				),
 			)
+		} else {
+			content = m.blurredStyle.Render(
+				lipgloss.JoinVertical(lipgloss.Left,
+					label,
+					naturalLanguageDueDateSection,
+					help,
+				),
+			)
 		}
-		return m.blurredStyle.Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				label,
-				naturalLanguageDueDateSection,
-				help,
-			),
-		)
 	}
+
+	if m.debug {
+		return lipgloss.JoinHorizontal(0, content, m.DebugInfo())
+	}
+	return content
 }
 
 type DueDateContent struct {

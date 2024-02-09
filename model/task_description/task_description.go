@@ -1,17 +1,20 @@
 package task_description
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"go.uber.org/zap"
+	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
 type Model struct {
-	logger            *zap.SugaredLogger
+	ctx               ctx.Context
 	focused           bool
+	debug             bool
 	label             string
 	labelStyle        lipgloss.Style
 	focusedLabelStyle lipgloss.Style
@@ -26,6 +29,7 @@ type keyMap struct {
 	Edit        key.Binding
 	StopEditing key.Binding
 	Help        key.Binding
+	Debug       key.Binding
 }
 
 var defaultKeyMap = keyMap{
@@ -41,6 +45,10 @@ var defaultKeyMap = keyMap{
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
 	),
+	Debug: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "Show debug information of focused component"),
+	),
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -50,15 +58,16 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Edit, k.StopEditing},
-		{k.Help},
+		{k.Help, k.Debug},
 	}
 }
 
 type ModelOption func(*Model)
 
-func NewModel(logger *zap.SugaredLogger, opts ...ModelOption) *Model {
+func NewModel(ctx ctx.Context, opts ...ModelOption) *Model {
 	const (
 		defaultLabel = "Description"
+		defaultDebug = false
 	)
 	defaultLabelStyle := lipgloss.NewStyle().
 		Underline(true).
@@ -77,8 +86,9 @@ func NewModel(logger *zap.SugaredLogger, opts ...ModelOption) *Model {
 	input.Placeholder = "No description..."
 	input.Prompt = ""
 	model := &Model{
-		logger:            logger,
+		ctx:               ctx,
 		focused:           false,
+		debug:             defaultDebug,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
 		focusedLabelStyle: defaultFocusedLabelStyle,
@@ -136,16 +146,16 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	m.logger.Info("In description update")
+	m.ctx.Logger.Info("In description update")
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.logger.Info("Setting width")
+		m.ctx.Logger.Info("Setting width")
 		m.input.SetWidth(msg.Width)
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Help):
-			m.logger.Info("Setting showall title")
+			m.ctx.Logger.Info("Setting showall title")
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 		case key.Matches(msg, m.keys.Edit) && !m.input.Focused():
@@ -155,12 +165,26 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.input.Focused() {
 				m.input.Blur()
 			}
+		case key.Matches(msg, m.keys.Debug):
+			m.debug = !m.debug
+			return m, nil
 		}
 	}
 	if m.input.Focused() {
 		m.input, cmd = m.input.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m Model) DebugInfo() string {
+	return m.ctx.Theme.Help.FullDesc.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			fmt.Sprintf("focused %t", m.focused),
+			fmt.Sprintf("editing %t", m.Editing()),
+			fmt.Sprintf("textinput value %s", m.input.Value()),
+		),
+	)
 }
 
 // FIXME: unsightly!
@@ -189,6 +213,9 @@ func (m Model) View() string {
 		)
 	}
 	if m.focused {
+		if m.debug {
+			return lipgloss.JoinHorizontal(0, m.focusedStyle.Render(content), m.blurredStyle.Render(m.DebugInfo()))
+		}
 		return m.focusedStyle.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
@@ -196,7 +223,14 @@ func (m Model) View() string {
 			),
 		)
 	}
+	if m.debug {
+		return lipgloss.JoinHorizontal(0, m.blurredStyle.Render(content), m.blurredStyle.Render(m.DebugInfo()))
+	}
 	return m.blurredStyle.Render(lipgloss.JoinVertical(lipgloss.Left, content))
+}
+
+func (m Model) Editing() bool {
+	return m.input.Focused()
 }
 
 func (m *Model) Focused() bool {

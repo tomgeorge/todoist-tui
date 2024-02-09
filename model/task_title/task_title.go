@@ -1,6 +1,8 @@
 package task_title
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	textinput "github.com/charmbracelet/bubbles/textinput"
@@ -22,6 +24,7 @@ type Model struct {
 	promptStyle       lipgloss.Style
 	textStyle         lipgloss.Style
 	help              help.Model
+	debug             bool
 	keys              keyMap
 }
 
@@ -29,6 +32,7 @@ type keyMap struct {
 	Edit        key.Binding
 	StopEditing key.Binding
 	Help        key.Binding
+	Debug       key.Binding
 }
 
 var defaultKeyMap = keyMap{
@@ -41,8 +45,12 @@ var defaultKeyMap = keyMap{
 		key.WithHelp("esc", "stop editing"),
 	),
 	Help: key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "help"),
+		key.WithKeys("ctrl+_"),
+		key.WithHelp("ctrl+?", "help"),
+	),
+	Debug: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "Show debug information of focused component"),
 	),
 }
 
@@ -53,7 +61,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Edit, k.StopEditing},
-		{k.Help},
+		{k.Help, k.Debug},
 	}
 }
 
@@ -67,6 +75,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		defaultLabel   = "Title"
 		defaultFocused = false
 		defaultEditing = false
+		defaultDebug   = false
 	)
 
 	defaultLabelStyle := lipgloss.NewStyle().
@@ -98,6 +107,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		focusedStyle:      defaultFocusedStyle,
 		help:              help.New(),
 		keys:              defaultKeyMap,
+		debug:             false,
 	}
 
 	for _, opt := range opts {
@@ -162,13 +172,21 @@ func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
 }
 
-func (m *Model) Editing() bool {
+func (m Model) Editing() bool {
 	return m.focused && m.textinput.Focused()
 }
 
 func (m *Model) SetEditing(editing bool) {
 	m.editing = editing
 	m.updateTextInputState()
+}
+
+func (m *Model) Debug() bool {
+	return m.debug
+}
+
+func (m *Model) SetDebug(debug bool) {
+	m.debug = debug
 }
 
 func (m *Model) SetHelp(help bool) {
@@ -187,6 +205,7 @@ func (m *Model) updateTextInputState() {
 func (m *Model) FocusOff() {
 	m.textinput.Blur()
 	m.focused = false
+	m.editing = false
 }
 
 func (m *Model) FocusOn() {
@@ -227,6 +246,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.StopEditing):
 			m.SetEditing(false)
 			return m, nil
+		case key.Matches(msg, m.keys.Debug):
+			m.debug = !m.debug
+			return m, nil
 		}
 
 	}
@@ -234,6 +256,17 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.textinput, cmd = m.textinput.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m *Model) DebugInfo() string {
+	return m.ctx.Theme.Help.FullDesc.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			fmt.Sprintf("focused %t\n", m.Focused()),
+			fmt.Sprintf("editing %t\n", m.Editing()),
+			fmt.Sprintf("textinput value [%s]\n", m.textinput.Value()),
+		),
+	)
 }
 
 func (m Model) View() string {
@@ -250,8 +283,12 @@ func (m Model) View() string {
 		sections = append(sections, m.textinput.Value())
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	style := m.blurredStyle
 	if m.Focused() {
-		return m.focusedStyle.Render(content)
+		style = m.focusedStyle
 	}
-	return m.blurredStyle.Render(content)
+	if m.Debug() {
+		return lipgloss.JoinHorizontal(0, style.Render(content), m.DebugInfo())
+	}
+	return style.Render(content)
 }

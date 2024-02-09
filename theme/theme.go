@@ -132,8 +132,7 @@ func ThemeBase() *Theme {
 	f.Base = lipgloss.NewStyle().
 		PaddingLeft(1).
 		BorderStyle(lipgloss.ThickBorder()).
-		BorderLeft(true).
-		MarginBottom(2)
+		BorderLeft(true)
 	f.Card = lipgloss.NewStyle().
 		PaddingLeft(1)
 	f.ErrorIndicator = lipgloss.NewStyle().

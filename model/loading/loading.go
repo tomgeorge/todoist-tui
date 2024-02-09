@@ -2,7 +2,10 @@ package loading
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +14,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/project_view"
+	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
@@ -61,11 +65,32 @@ func WithErrorStyle(errorStyle lipgloss.Style) ModelOption {
 
 func (m *Model) performSync() tea.Cmd {
 	return func() tea.Msg {
+		stateFile, err := os.ReadFile(filepath.Join(m.ctx.Config.StateDir, "state.json"))
+		if err != nil && !os.IsNotExist(err) {
+			return messages.StateMessage{State: nil, Err: err}
+		}
+		if len(stateFile) != 0 {
+			state := &sync.SyncResponse{}
+			err := json.Unmarshal(stateFile, state)
+			if err != nil {
+				return messages.StateMessage{State: nil, Err: err}
+			}
+			m.ctx.Logger.Debug("Found a state file, doing weird mergey shit now")
+			recentUpdates, err := m.ctx.Client.FullSync(context.Background(), sync.WithSyncToken(state.SyncToken))
+			if err != nil {
+				return messages.StateMessage{State: state, Err: err}
+			}
+			m.ctx.Logger.Infof("Got more recent state %v", recentUpdates)
+			return messages.StateMessage{State: state, Err: err}
+		}
 		state, err := m.ctx.Client.FullSync(context.Background())
 		return messages.StateMessage{State: state, Err: err}
 	}
 }
 
+// FIXME: I'm not quite sure why this is needed, and why I can't return
+// tea.Batch(performSync(), m.spinner.Tick) in Init(), but it doesn't work and
+// I can't remember why at the moment
 func load() tea.Cmd {
 	return func() tea.Msg { return messages.LoadingMessage{} }
 }
@@ -97,16 +122,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return i.ProjectId == state.Projects[0].Id
 		})
 		projects := project_view.New(m.ctx, msg.State.Projects[0], tasks, msg.State.Labels, msg.State.Projects)
-		return m, messages.Push("project_view", projects)
+		return m, tea.Batch(
+			messages.SaveState(m.ctx, state),
+			messages.Push("project_view", projects),
+		)
 	}
 	return m, cmd
 }
 
 func (m Model) View() string {
-	m.ctx.Logger.Debugf("loading.view(), error message is %s", m.errorMessage)
 	if m.loading {
-		return fmt.Sprintf("%s fetching data from todoist...",
-			m.spinner.View())
+		return lipgloss.NewStyle().PaddingLeft(1).Render(fmt.Sprintf("%s fetching data from todoist...",
+			m.spinner.View()))
 	} else {
 		return lipgloss.JoinVertical(lipgloss.Left, m.errorStyle.Render(m.errorMessage, "\n"))
 	}

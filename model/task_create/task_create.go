@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -35,6 +34,7 @@ type keyMap struct {
 	Help        key.Binding
 	Quit        key.Binding
 	Back        key.Binding
+	Debug       key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -43,8 +43,8 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.ScrollDown, k.ScrollUp, k.ScrollLeft, k.ScrollRight, k.Quit},
-		{k.Help},
+		{k.ScrollDown, k.ScrollUp, k.ScrollLeft, k.ScrollRight, k.Back},
+		{k.Help, k.Debug, k.Quit},
 	}
 }
 
@@ -74,8 +74,12 @@ var defaultKeys = keyMap{
 		key.WithHelp("ctrl+c", "quit"),
 	),
 	Back: key.NewBinding(
-		key.WithKeys("backsapce"),
-		key.WithKeys("backspace", "back/cancel"),
+		key.WithKeys("backspace"),
+		key.WithHelp("backspace", "back/cancel"),
+	),
+	Debug: key.NewBinding(
+		key.WithKeys("f5"),
+		key.WithHelp("<F5>", "show debug information for the parent component"),
 	),
 }
 
@@ -85,7 +89,6 @@ type Model struct {
 	focusedStyle  lipgloss.Style
 	width         int
 	height        int
-	components    []tea.Model
 	project       picker.Model
 	title         task_title.Model
 	description   task_description.Model
@@ -103,6 +106,7 @@ type Model struct {
 	taskLabels    []*types.Label
 	showSpinner   bool
 	spinner       spinner.Model
+	debug         bool
 }
 
 type Section int
@@ -119,6 +123,7 @@ const (
 	lastSection   = cancelSection
 	initialWidth  = 50
 	initialHeight = 50
+	defaultDebug  = false
 )
 
 type ModelOption func(*Model)
@@ -136,7 +141,7 @@ var validationStyle = lipgloss.NewStyle().
 func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	defaultProjects := []picker.PickerItem{}
 	defaultLabels := []picker.PickerItem{}
-	defaultPriorities := []picker.PickerItem{}
+	defaultPriorities := picker.NewPickerItem(types.Priorities)
 
 	projects := picker.New(
 		ctx,
@@ -154,7 +159,6 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	titleModel := task_title.New(
 		ctx,
 		task_title.WithLabel("Content"),
-		task_title.WithContent("Buy Bread"),
 		task_title.WithFocusedLabelStyle(ctx.Theme.Focused.Title),
 		task_title.WithLabelStyle(ctx.Theme.Blurred.Title),
 		task_title.WithPromptStyle(ctx.Theme.Focused.TextInput.Prompt),
@@ -163,12 +167,11 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		task_title.WithBlurredStyle(ctx.Theme.Blurred.Base),
 	)
 	descriptionModel := task_description.NewModel(
-		ctx.Logger,
+		ctx,
 		task_description.WithLabelStyle(ctx.Theme.Focused.Title),
 		task_description.WithFocusedLabelStyle(ctx.Theme.Blurred.Title),
 		task_description.WithFocusedStyle(ctx.Theme.Focused.Base),
 		task_description.WithBlurredStyle(ctx.Theme.Blurred.Base),
-		task_description.WithValue("I need some bread from the store"),
 	)
 	dueDate := date_picker.NewModel(
 		ctx,
@@ -241,10 +244,15 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		events:        *events,
 		showSpinner:   false,
 		spinner:       spinner.New(spinner.WithSpinner(spinner.Dot)),
+		debug:         defaultDebug,
 	}
 
 	for _, opt := range opts {
 		opt(model)
+	}
+
+	if model.parentProject != nil {
+		model.project.Select(model.parentProject.Name)
 	}
 
 	if model.task != nil {
@@ -271,8 +279,14 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 				model.dueDate.SetAbsoluteDueDate(dd.In(time.Local))
 			}
 		}
+		submit := button.New(
+			button.WithText("Task"),
+			button.WithEnabled(true),
+			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
+			button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+		)
+		model.submit = *submit
 	}
-
 	model.title.SetFocused(true)
 
 	return model
@@ -421,7 +435,10 @@ func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
 	m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
 	m.showSpinner = true
 	if m.focused == submitSection {
-		return m, m.UpdateTask()
+		if m.task != nil {
+			return m, tea.Batch(m.spinner.Tick, m.UpdateTask())
+		}
+		return m, tea.Batch(m.spinner.Tick, m.createTask())
 	}
 	if m.focused == cancelSection {
 		return m, messages.Pop()
@@ -429,7 +446,7 @@ func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-func handleItemUpdate(m Model, msg ItemUpdatedMsg) (Model, tea.Cmd) {
+func handleTaskUpdate(m Model, msg ItemUpdatedMsg) (Model, tea.Cmd) {
 	m.ctx.Logger.Info("Item updated msg %v %v", msg.Task, msg.Error)
 	var event events.NewMessage
 	if msg.Error == nil {
@@ -448,25 +465,71 @@ func handleItemUpdate(m Model, msg ItemUpdatedMsg) (Model, tea.Cmd) {
 		}
 	}
 	m.showSpinner = false
+	// have to reset the spinner or we'll be inundated with tick messages if we
+	// stay on this screen
+	m.spinner = spinner.New(spinner.WithSpinner(spinner.Dot))
 	return m, m.events.Publish(event.Message, event.Style, event.Timeout, event.Duration)
+}
+
+func handleTaskCreated(m Model, msg messages.TaskCreatedMessage) (Model, tea.Cmd) {
+	m.ctx.Logger.Debug("Item created message")
+	m.showSpinner = false
+	m.spinner = spinner.New(spinner.WithSpinner(spinner.Dot))
+	if msg.Error != nil {
+		return m, m.events.Publish(
+			fmt.Sprintf("Failed to create task: %s", msg.Error.Error()),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
+			true,
+			5*time.Second,
+		)
+	}
+	return m, m.events.Publish(
+		"Task created",
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
+		true,
+		5*time.Second,
+	)
+}
+
+// Check if any part of the model is in an editing state
+//
+// I could maybe do this in a nice way but I don't want to deal with pointers
+// and interfaces etc
+func currentlyEditing(m Model) bool {
+	switch {
+	case m.title.Editing():
+		return true
+	case m.project.Editing():
+		return true
+	case m.dueDate.Editing():
+		return true
+	case m.description.Editing():
+		return true
+	case m.labels.Editing():
+		return true
+	case m.priority.Editing():
+		return true
+	default:
+		return false
+	}
 }
 
 func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
 		m.ctx.Logger.Debug("got a backspace")
-		empty := sync.UpdateItemArgs{}
-		if diff, _ := m.diff(); reflect.DeepEqual(*diff, empty) {
-			m.ctx.Logger.Debug("Are you sure you want to quit?")
+		if currentlyEditing(m) {
+			m.ctx.Logger.Debug("currently editing")
+			return m, nil
 		}
-		if !m.title.Editing() {
-			return m, messages.Pop()
-		}
-		return m, nil
+		return m, messages.Pop()
 	case key.Matches(msg, m.keys.Help):
 		m.ctx.Logger.Info("Got help")
 		m.help.ShowAll = !m.help.ShowAll
 		m.handleHelp()
+		return m, nil
+	case key.Matches(msg, m.keys.Debug):
+		m.debug = !m.debug
 		return m, nil
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -505,7 +568,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case button.SubmitMsg:
 		return handleSubmit(m, msg)
 	case ItemUpdatedMsg:
-		return handleItemUpdate(m, msg)
+		return handleTaskUpdate(m, msg)
+	case messages.TaskCreatedMessage:
+		return handleTaskCreated(m, msg)
 	case tea.WindowSizeMsg:
 		return handleWindowSize(m, msg), nil
 	case tea.KeyMsg:
@@ -547,6 +612,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancel, cmd = m.cancel.Update(msg)
 		cmds = append(cmds, cmd)
 	}
+	m.ctx.Logger.Debug("spinner update")
+	m.spinner, cmd = m.spinner.Update(msg)
+	cmds = append(cmds, cmd)
+
 	m.events, cmd = m.events.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
@@ -583,23 +652,28 @@ func projectsSelected(m *Model) bool {
 }
 
 func (m *Model) renderContent(isSelected selectedFunc, fullWidth bool, content string) string {
+	gap := lipgloss.NewStyle().MarginBottom(2)
 	if isSelected(m) {
 		if fullWidth {
-			return m.focusedStyle.Copy().Width(m.width - m.focusedStyle.GetHorizontalFrameSize()).Render(content)
+			return gap.Render(
+				m.focusedStyle.Copy().Width(m.width - m.focusedStyle.GetHorizontalFrameSize()).Render(content),
+			)
 		}
-		return m.focusedStyle.Render(content)
+		return gap.Render(
+			m.focusedStyle.Render(content),
+		)
 	}
-	return content
+	return gap.Render(content)
 }
 
-func (m *Model) getTaskContent() types.CreateTaskRequest {
+func (m *Model) getTaskContent() sync.AddItemArgs {
 	items := m.labels.GetSelectedItems()
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Render()
 	}
 
-	taskRequest := types.CreateTaskRequest{
+	taskRequest := sync.AddItemArgs{
 		Content:     m.title.GetContent(),
 		Description: m.description.GetContent(),
 		Labels:      labels,
@@ -608,43 +682,39 @@ func (m *Model) getTaskContent() types.CreateTaskRequest {
 	dueDate := m.dueDate.GetContent()
 	switch {
 	case dueDate.HasDueDate && dueDate.HumanInputDate != "":
-		taskRequest.DueString = dueDate.HumanInputDate
+		taskRequest.Due = &types.DueDate{
+			String: dueDate.HumanInputDate,
+		}
 	case dueDate.HasDueDate && dueDate.HumanInputDate == "" && dueDate.IncludeHoursAndMinutes:
-		taskRequest.DueDateTime = dueDate.AbsoluteDate.Format(time.RFC3339)
+		taskRequest.Due = &types.DueDate{
+			Date: dueDate.AbsoluteDate.UTC().Format(time.RFC3339),
+		}
+	case !dueDate.HasDueDate:
+		break
 	default:
-		taskRequest.DueDate = dueDate.AbsoluteDate.Format("2006-01-02")
+		taskRequest.Due = &types.DueDate{
+			Date: dueDate.AbsoluteDate.Format("2006-01-02"),
+		}
 	}
 
 	priorityItems := m.priority.GetSelectedItems()
 	if len(priorityItems) == 1 {
-		priority, err := strconv.Atoi(priorityItems[0].Render())
-		if err != nil {
-			//FIXME: handle error
-		}
+		priority, _ := strconv.Atoi(priorityItems[0].Render())
 		taskRequest.Priority = priority
 	}
 
 	if len(m.project.GetSelectedItems()) == 1 {
-		project, ok := m.project.GetSelectedItems()[0].(types.Project)
-		if !ok {
-			//FIXME handle error
-		}
+		project, _ := m.project.GetSelectedItems()[0].(types.Project)
 		taskRequest.ProjectId = project.Id
 	}
 	return taskRequest
 }
 
-func (m *Model) MakeTask() types.CreateTaskRequest {
-	return m.getTaskContent()
-}
-
-func renderTaskContent(t types.CreateTaskRequest) string {
-	json, _ := json.Marshal(t)
-	return lipgloss.NewStyle().Render(string(json))
-}
-
 func (m Model) View() string {
 	sections := []string{}
+	if m.debug {
+		sections = append(sections, m.DebugInfo())
+	}
 	var (
 	// titleSelected = m.focused == titleSection
 	)
@@ -692,24 +762,44 @@ func (m Model) View() string {
 			sections = append(sections, m.submit.Help().View(m.submit.HelpKeys()))
 		}
 	}
+	sections = append(sections, m.help.View(m.keys))
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}
 	sections = append(sections, m.events.View())
-	sections = append(sections, m.help.View(m.keys))
-	diff, _ := m.diff()
-	diffJson, _ := json.Marshal(diff)
-	sections = append(sections, fmt.Sprintf("%s\n", string(diffJson)))
-	// buf, _ := json.Marshal(m.task.Due)
-	// parsed, _ := time.Parse("2006-01-02T15:04:04", m.task.Due.Date)
-	// sections = append(sections, fmt.Sprintf("JSON of due date %s parsed time %s", string(buf), m.task.Due.Date))
-	// If the form grows larger than the screensize we may need this
-	// m.viewport.SetContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
-	// return m.viewport.View()
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
+func (m *Model) Debug() bool {
+	return m.debug
+}
+
+func (m *Model) SetDebug(debug bool) {
+	m.debug = debug
+}
+
+func (m *Model) DebugInfo() string {
+	sections := []string{}
+	sections = append(sections, "task_create - debug information")
+	sections = append(sections, fmt.Sprintf("width %d", m.width))
+	sections = append(sections, fmt.Sprintf("height %d", m.height))
+	sections = append(sections, fmt.Sprintf("focused section - zero indexed %d", m.focused))
+	sections = append(sections, fmt.Sprintf("showSpinner %t", m.showSpinner))
+	if m.task == nil {
+		createJson, _ := json.Marshal(m.getTaskContent())
+		sections = append(sections, fmt.Sprintf("command: %s", createJson))
+	} else {
+		diff, _ := m.diff()
+		diffJson, _ := json.Marshal(diff)
+		sections = append(sections, fmt.Sprintf("%s\n", string(diffJson)))
+	}
+	return m.ctx.Theme.Help.ShortDesc.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
 func (m *Model) diff() (*sync.UpdateItemArgs, error) {
+	if m.debug {
+
+	}
 	args := &sync.UpdateItemArgs{}
 	args.Id = m.task.Id
 	if m.task.Content != m.title.GetContent() {
@@ -782,5 +872,12 @@ func (m *Model) UpdateTask() tea.Cmd {
 		diff, _ := m.diff()
 		task, err := m.ctx.Client.UpdateTask(context.Background(), *diff)
 		return ItemUpdatedMsg{task, err}
+	}
+}
+
+func (m *Model) createTask() tea.Cmd {
+	return func() tea.Msg {
+		task, err := m.ctx.Client.AddTask(context.Background(), m.getTaskContent())
+		return messages.TaskCreatedMessage{Task: task, Error: err}
 	}
 }

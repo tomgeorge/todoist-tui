@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wordwrap"
+	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
@@ -19,6 +20,7 @@ type keyMap struct {
 	NextSuggestion key.Binding
 	CancelInput    key.Binding
 	Help           key.Binding
+	Debug          key.Binding
 	ShowAvailable  key.Binding
 }
 
@@ -43,6 +45,10 @@ var defaultKeyMap = keyMap{
 		key.WithKeys("ctrl+l", "show available items"),
 		key.WithHelp("ctrl+l", "show available items"),
 	),
+	Debug: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "Show debug information of focused component"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?", "help"),
 		key.WithHelp("?", "help"),
@@ -56,7 +62,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.New, k.Confirm, k.CancelInput, k.ShowAvailable},
-		{k.Help},
+		{k.Help, k.Debug},
 	}
 }
 
@@ -107,10 +113,10 @@ type PickerItem interface {
 // }
 
 // Construct a new picker item list
-func NewPickerItem(elements []interface{}) []PickerItem {
+func NewPickerItem[T PickerItem](elements []T) []PickerItem {
 	items := make([]PickerItem, len(elements))
-	for i, item := range items {
-		elements[i] = item
+	for i, item := range elements {
+		items[i] = item
 	}
 	return items
 }
@@ -119,6 +125,7 @@ func NewPickerItem(elements []interface{}) []PickerItem {
 
 type Model struct {
 	ctx               ctx.Context
+	debug             bool
 	focused           bool
 	textInput         textinput.Model
 	requiredSelection int
@@ -163,6 +170,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		defaultLabel             = "Items"
 		defaultMultipleSelection = true
 		defaultRequiredSelection = 0
+		defaultDebug             = false
 	)
 	defaultLabelStyle := lipgloss.NewStyle().
 		Underline(true).
@@ -182,6 +190,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 
 	model := &Model{
 		ctx:               ctx,
+		debug:             defaultDebug,
 		items:             defaultItems,
 		label:             defaultLabel,
 		labelStyle:        defaultLabelStyle,
@@ -291,6 +300,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.textInput.Focus()
 				return m, nil
 			}
+		case key.Matches(msg, m.keys.Debug):
+			m.debug = !m.debug
+			return m, nil
 		case key.Matches(msg, m.keys.CancelInput):
 			if m.textInputVisible && m.textInput.Focused() {
 				m.ctx.Logger.Infof("Got cancel input command, unfocusing")
@@ -330,6 +342,20 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m Model) DebugInfo() string {
+	items := lo.Map(m.GetSelectedItems(), func(item PickerItem, _ int) string {
+		return item.Render()
+	})
+	return m.ctx.Theme.Help.FullDesc.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			fmt.Sprintf("focused %t", m.focused),
+			fmt.Sprintf("editing %t", m.Editing()),
+			fmt.Sprintf("selected %v", items),
+		),
+	)
+}
+
 func (m Model) View() string {
 	sections := []string{}
 	if m.focused {
@@ -357,11 +383,17 @@ func (m Model) View() string {
 	if m.focused && m.requiredSelection > 0 && len(m.selectedItems) != m.requiredSelection {
 		sections = append(sections, m.validationStyle.Render(fmt.Sprintf("This section requires %d selection(s)", m.requiredSelection)))
 	}
-
+	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	if m.focused {
-		return m.focusedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+		if m.debug {
+			return lipgloss.JoinHorizontal(0, m.focusedStyle.Render(content), m.blurredStyle.Render(m.DebugInfo()))
+		}
+		return m.focusedStyle.Render(content)
 	}
-	return m.blurredStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	if m.debug {
+		return lipgloss.JoinHorizontal(0, m.blurredStyle.Render(content), m.blurredStyle.Render(m.DebugInfo()))
+	}
+	return m.blurredStyle.Render(content)
 }
 
 // Select the item in model.items indicated by value
@@ -440,6 +472,10 @@ func (m *Model) FocusOff() {
 		m.textInputVisible = false
 		m.textInput.Blur()
 	}
+}
+
+func (m Model) Editing() bool {
+	return m.textInputVisible && m.textInput.Focused()
 }
 
 func (m *Model) GetSelectedItems() []PickerItem {

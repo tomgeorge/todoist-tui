@@ -87,8 +87,8 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*htt
 	return resp, err
 }
 
-func (c *Client) FullSync(ctx context.Context) (*SyncResponse, error) {
-	return c.Sync(ctx, SyncRequest{SyncToken: "*", ResourceTypes: []string{"all"}})
+func (c *Client) FullSync(ctx context.Context, opts ...SyncOption) (*SyncResponse, error) {
+	return c.Sync(ctx, SyncRequest{SyncToken: "*", ResourceTypes: []string{"all"}}, opts...)
 }
 
 // WithAuthToken returns a copy of the client configured to use the provided token for the Authorization header.
@@ -265,10 +265,21 @@ func (o *OperationResult) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("Failed to unmarshal sync status to operational result")
 }
 
-type SyncOption func(syncRequest SyncRequest)
+type SyncOption func(syncRequest SyncRequest) SyncRequest
 
-func (c *Client) Sync(ctx context.Context, syncRequest SyncRequest, opt ...SyncOption) (*SyncResponse, error) {
-	bodyParams, _ := query.Values(syncRequest)
+func WithSyncToken(syncToken string) SyncOption {
+	return func(syncRequest SyncRequest) SyncRequest {
+		syncRequest.SyncToken = syncToken
+		return syncRequest
+	}
+}
+
+func (c *Client) Sync(ctx context.Context, syncRequest SyncRequest, opts ...SyncOption) (*SyncResponse, error) {
+	sr := syncRequest
+	for _, opt := range opts {
+		sr = opt(sr)
+	}
+	bodyParams, _ := query.Values(sr)
 	body := strings.NewReader(bodyParams.Encode())
 	req, err := c.NewRequest("POST", "sync", body)
 	if err != nil {

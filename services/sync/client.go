@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
@@ -936,4 +937,39 @@ type SyncResponse struct {
 	TempIdMapping map[string]string `json:"temp_id_mapping"`
 	// Mapping of sync operations by uuid to their status
 	SyncStatus map[string]OperationResult `json:"sync_status"`
+}
+
+// Merge merges an existing state with new state received from the server. Only
+// merges in task updates for now.
+//
+// If an item can be found, we always take the new item.
+// Otherwise, we assume the task was created since we opened the app
+// and we append to the list of tasks in the state.
+// When a task is completed or deleted, either Checked or IsDeleted will be
+// true, so that counts as an update as well, and presumably will be thrown away
+// on subsequent API requests.
+//
+// One problem we'll have though is if we always start the app with a state file
+// and we just have a ton of Checked and IsDeleted items in the state file.
+//
+// FIXME: See how todoist handles reaping these tasks
+func Merge(oldState, newState *SyncResponse) *SyncResponse {
+	lo.Reduce(oldState.Items, func(m map[string]*types.Item, item *types.Item, _ int) map[string]*types.Item {
+		ret := m
+		ret[item.Id] = item
+		return ret
+	}, make(map[string]*types.Item))
+	state := oldState
+	for _, item := range newState.Items {
+		_, idx, found := lo.FindIndexOf(state.Items, func(e *types.Item) bool {
+			return e.Id == item.Id
+		})
+		if found {
+			state.Items[idx] = item
+		} else {
+			state.Items = append(state.Items, item)
+		}
+	}
+	state.SyncToken = newState.SyncToken
+	return state
 }

@@ -2,6 +2,9 @@ package model
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -86,6 +89,32 @@ func (m *Model) performSync() tea.Cmd {
 	}
 }
 
+type SaveAndQuitMsg struct {
+	Error error
+}
+
+func (m *Model) save() tea.Cmd {
+	return func() tea.Msg {
+		state, err := os.Create(filepath.Join(m.ctx.Config.StateDir, "state.json"))
+		if err != nil {
+			m.ctx.Logger.Debug("error creating file", err)
+			return SaveAndQuitMsg{Error: err}
+		}
+		defer state.Close()
+		json, err := json.MarshalIndent(m.state, "", "  ")
+		if err != nil {
+			m.ctx.Logger.Debug("error marshalling json", err)
+			return SaveAndQuitMsg{Error: err}
+		}
+		_, err = state.Write(json)
+		if err != nil {
+			m.ctx.Logger.Debug("writing file", err)
+			return SaveAndQuitMsg{Error: err}
+		}
+		return SaveAndQuitMsg{Error: nil}
+	}
+}
+
 type StartSpinnerMessage struct{}
 
 func startSpinner() tea.Cmd {
@@ -120,11 +149,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, cmd
+	case messages.StateMessage:
+		if msg.Err == nil {
+			m.state = msg.State
+		}
 	case tea.KeyMsg:
 		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
 		case "ctrl+c":
-			return m, tea.Quit
+			return m, tea.Sequence(m.save(), tea.Quit)
 		}
 	}
 	m.ctx.Logger.Infof("Updating %s", m.stack[len(m.stack)-1].Id)

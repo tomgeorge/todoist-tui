@@ -16,6 +16,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/project_view"
 	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/types"
+	"github.com/tomgeorge/todoist-tui/util"
 )
 
 type Model struct {
@@ -69,6 +70,7 @@ func (m *Model) performSync() tea.Cmd {
 		if err != nil && !os.IsNotExist(err) {
 			return messages.StateMessage{State: nil, Err: err}
 		}
+		m.ctx.Logger.Debug("state", util.PrettyJSON(stateFile))
 		if len(stateFile) != 0 {
 			state := &sync.SyncResponse{}
 			err := json.Unmarshal(stateFile, state)
@@ -80,8 +82,8 @@ func (m *Model) performSync() tea.Cmd {
 			if err != nil {
 				return messages.StateMessage{State: state, Err: err}
 			}
-			m.ctx.Logger.Infof("Got more recent state %v", recentUpdates)
-			return messages.StateMessage{State: state, Err: err}
+			m.ctx.Logger.Debug("Recent state", util.PrettyStruct(recentUpdates))
+			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Err: err}
 		}
 		state, err := m.ctx.Client.FullSync(context.Background())
 		return messages.StateMessage{State: state, Err: err}

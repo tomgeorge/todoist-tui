@@ -391,59 +391,6 @@ type FileAttachment struct {
 	UploadState string `json:"upload_state"`
 }
 
-// Also known as Comments. Notes is an old term they used and will be amended
-// in a future version of the sync API.
-//
-// Availability of comments functionality is dependent on the current user
-// plan. This value is indicated by the comments property of the user plan
-// limits object
-type Note struct {
-	// The ID of the note
-	Id string `json:"id"`
-	// The ID of the user that posted the note
-	PostedUid string `json:"posted_uid"`
-	// The item which the note is part of
-	ItemId string `json:"item_id"`
-	// The content of the note. This value may contain markdown-formatted text and
-	// hyperlinks. Details on markdown support can be found in the Text Formatting
-	// article in the help center
-	Content string `json:"content"`
-	// A file attached to the note
-	FileAttachment FileAttachment `json:"file_attachment"`
-	// A list of user IDS to notify
-	UidsToNotify []string `json:"uids_to_notify"`
-	//Whether the note is marked as deleted
-	IsDeleted bool `json:"is_deleted"`
-	// The date when the note was posted
-	PostedAt time.Time `json:"posted_at"`
-	// A list of emoji reactions and corresponding user IDs.
-	Reactions map[string]string `json:"reactions"`
-}
-
-// A comment, but for a project
-type ProjectNote struct {
-	// The ID of the note
-	Id string `json:"id"`
-	// The ID of the user that posted the note
-	PostedUid string `json:"posted_uid"`
-	// The item which the note is part of
-	ProjectId string `json:"project_id"`
-	// The content of the note. This value may contain markdown-formatted text and
-	// hyperlinks. Details on markdown support can be found in the Text Formatting
-	// article in the help center
-	Content string `json:"content"`
-	// A file attached to the note
-	FileAttachment FileAttachment `json:"file_attachment"`
-	// A list of user IDS to notify
-	UidsToNotify []string `json:"uids_to_notify"`
-	//Whether the note is marked as deleted
-	IsDeleted bool `json:"is_deleted"`
-	// The date when the note was posted
-	PostedAt time.Time `json:"posted_at"`
-	// A list of emoji reactions and corresponding user IDs.
-	Reactions map[string]string `json:"reactions"`
-}
-
 // Reminder for a task. Availabilty is dependent on the current user plan,
 // indicated by reminders, max_reminders_time, and max_reminders_location in the
 // user plan limits object
@@ -864,14 +811,14 @@ type SyncResponse struct {
 	// 0 - Name of the Location
 	// 1 - Latitude
 	// 2 - Longitude
-	Locations [][]string `json:"locations,omitempty"`
-	Notes     []Note     `json:"notes,omitempty"`
+	Locations [][]string   `json:"locations,omitempty"`
+	Notes     []types.Note `json:"notes,omitempty"`
 	// Apparently you can comment on projects, who knew?!?!
-	ProjectNotes []ProjectNote    `json:"project_notes,omitempty"`
-	Projects     []*types.Project `json:"projects,omitempty"`
-	Reminders    []Reminder       `json:"reminders,omitempty"`
-	Sections     []Section        `json:"sections,omitempty"`
-	Stats        Stats            `json:"stats,omitempty"`
+	ProjectNotes []types.ProjectNote `json:"project_notes,omitempty"`
+	Projects     []*types.Project    `json:"projects,omitempty"`
+	Reminders    []Reminder          `json:"reminders,omitempty"`
+	Sections     []Section           `json:"sections,omitempty"`
+	Stats        Stats               `json:"stats,omitempty"`
 	// The returned sync token
 	SyncToken string `json:"sync_token"`
 	// UNDOCUMENTED

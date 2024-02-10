@@ -83,12 +83,13 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 	}
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title
-	delegate.Styles.SelectedDesc = ctx.Theme.Focused.Title
+	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc
 	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Blurred.Description
+	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc
 
 	list := list.New(items, delegate, 50, 50)
 	list.Title = project.Name
+	list.Styles.Title = lipgloss.NewStyle().Foreground(lipgloss.Color("#81c8be"))
 	m := &Model{
 		ctx:         ctx,
 		help:        help.New(),
@@ -118,13 +119,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case msg.String() == "n":
-			// taskModel := task_create.New(
-			// 	m.ctx,
-			// 	task_create.WithParentProject(m.project),
-			// 	task_create.WithPossibleLabels(m.allLabels),
-			// 	task_create.WithProjects(m.allProjects),
-			// )
-			// return m, messages.Push("task_create", taskModel)
 			m.list.Select(-1)
 			m.create.SetFocus(true)
 		case key.Matches(msg, m.keys.Quit):
@@ -164,7 +158,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	sections := []string{}
-	sections = append(sections, m.ctx.Theme.Focused.Base.Render(m.create.View()))
+	if m.create.Focused() {
+		sections = append(sections, m.ctx.Theme.Focused.Base.Render(m.create.View()))
+	} else {
+		sections = append(sections, m.ctx.Theme.Blurred.Base.Render(m.create.View()))
+	}
 	sections = append(sections, m.list.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

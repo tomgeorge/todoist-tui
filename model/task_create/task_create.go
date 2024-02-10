@@ -102,6 +102,7 @@ type Model struct {
 	help          help.Model
 	keys          keyMap
 	task          *types.Item
+	comments      []types.Note
 	parentProject *types.Project
 	taskLabels    []*types.Label
 	showSpinner   bool

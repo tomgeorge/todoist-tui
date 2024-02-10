@@ -147,6 +147,10 @@ func (m *Model) SetFocus(focused bool) {
 	m.focused = focused
 }
 
+func (m Model) Focused() bool {
+	return m.focused
+}
+
 func (m Model) View() string {
 	switch {
 	case m.focused:

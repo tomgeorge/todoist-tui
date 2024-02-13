@@ -92,6 +92,14 @@ func (c *Client) FullSync(ctx context.Context, opts ...SyncOption) (*SyncRespons
 	return c.Sync(ctx, SyncRequest{SyncToken: "*", ResourceTypes: []string{"all"}}, opts...)
 }
 
+func (c *Client) NewSyncRequest(resourceTypes []string, commands CommandList) *SyncRequest {
+	return &SyncRequest{
+		SyncToken:     c.syncToken,
+		ResourceTypes: resourceTypes,
+		Commands:      commands,
+	}
+}
+
 // WithAuthToken returns a copy of the client configured to use the provided token for the Authorization header.
 func (c *Client) WithAuthToken(token string) *Client {
 	c2 := c.copy()

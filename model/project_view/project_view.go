@@ -1,6 +1,8 @@
 package project_view
 
 import (
+	"fmt"
+	"io"
 	"slices"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -13,6 +15,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
+	"github.com/tomgeorge/todoist-tui/theme"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
@@ -73,6 +76,27 @@ type Model struct {
 
 type ModelOption func(m *Model)
 
+type delegate struct {
+	theme *theme.Theme
+}
+
+func (d delegate) Height() int                             { return 1 }
+func (d delegate) Spacing() int                            { return 0 }
+func (d delegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(*types.Item)
+	if !ok {
+		return
+	}
+	if i.Checked && index == m.Index() {
+		fmt.Fprint(w, d.theme.Focused.Base.Render(i.Content))
+	} else if i.Checked {
+		fmt.Fprint(w, d.theme.Blurred.Base.Copy().Strikethrough(true).Render(i.Content))
+	} else {
+		fmt.Fprint(w, d.theme.Blurred.Base.Render(i.Content))
+	}
+}
+
 func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []*types.Label, projects []*types.Project, opts ...ModelOption) *Model {
 	var (
 		defaultTitleStyle = lipgloss.NewStyle().Bold(true).Underline(true)
@@ -82,10 +106,10 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		items = append(items, task)
 	}
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title
-	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc
+	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(2)
+	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(2)
 	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc
+	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(2)
 
 	list := list.New(items, delegate, 50, 50)
 	list.Title = project.Name

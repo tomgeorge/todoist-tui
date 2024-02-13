@@ -129,6 +129,8 @@ const (
 
 type ModelOption func(*Model)
 
+type ItemMessage struct {
+}
 type ItemUpdatedMsg struct {
 	Task  *types.Item
 	Error error
@@ -281,7 +283,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 			}
 		}
 		submit := button.New(
-			button.WithText("Task"),
+			button.WithText("Update Task"),
 			button.WithEnabled(true),
 			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
 			button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
@@ -581,16 +583,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.focused {
 	case titleSection:
-		m.title.FocusOn()
 		m.title, cmd = m.title.Update(msg)
 		cmds = append(cmds, cmd)
 	case projectSection:
-		m.project.FocusOn()
 		m.ctx.Logger.Info("projects are focused")
 		m.project, cmd = m.project.Update(msg)
 		cmds = append(cmds, cmd)
 	case dueSection:
-		m.dueDate.FocusOn()
 		m.dueDate, cmd = m.dueDate.Update(msg)
 		cmds = append(cmds, cmd)
 	case descriptionSection:
@@ -779,6 +778,20 @@ func (m *Model) SetDebug(debug bool) {
 	m.debug = debug
 }
 
+func (m Model) commands() (sync.CommandList, error) {
+	commands := make(sync.CommandList, 0)
+	if m.task != nil {
+		diff, err := m.diff()
+		if err != nil {
+			return commands, err
+		}
+		commands = append(commands, *sync.NewCommand("item_update", sync.WithArgs(diff)))
+	} else {
+		commands = append(commands, *sync.NewCommand("item_add", sync.WithArgs(m.getTaskContent())))
+	}
+	return commands, nil
+}
+
 func (m *Model) DebugInfo() string {
 	sections := []string{}
 	sections = append(sections, "task_create - debug information")
@@ -786,6 +799,11 @@ func (m *Model) DebugInfo() string {
 	sections = append(sections, fmt.Sprintf("height %d", m.height))
 	sections = append(sections, fmt.Sprintf("focused section - zero indexed %d", m.focused))
 	sections = append(sections, fmt.Sprintf("showSpinner %t", m.showSpinner))
+	commands, err := m.commands()
+	if err != nil {
+	}
+	commandsJson, _ := json.Marshal(commands)
+	sections = append(sections, fmt.Sprintf("commands: %s", commandsJson))
 	if m.task == nil {
 		createJson, _ := json.Marshal(m.getTaskContent())
 		sections = append(sections, fmt.Sprintf("command: %s", createJson))
@@ -870,9 +888,10 @@ func equalIgnoreOrder[T comparable](s1 []T, s2 []T) bool {
 
 func (m *Model) UpdateTask() tea.Cmd {
 	return func() tea.Msg {
-		diff, _ := m.diff()
-		task, err := m.ctx.Client.UpdateTask(context.Background(), *diff)
-		return ItemUpdatedMsg{task, err}
+		commands, err := m.commands()
+		request := m.ctx.Client.NewSyncRequest([]string{"items"}, commands)
+		response, err := m.ctx.Client.Sync(context.Background(), *request)
+		return messages.OperationResponse{State: response, Error: err}
 	}
 }
 

@@ -68,25 +68,25 @@ func (m *Model) performSync() tea.Cmd {
 	return func() tea.Msg {
 		stateFile, err := os.ReadFile(filepath.Join(m.ctx.Config.StateDir, "state.json"))
 		if err != nil && !os.IsNotExist(err) {
-			return messages.StateMessage{State: nil, Err: err}
+			return messages.StateMessage{State: nil, Error: err}
 		}
 		m.ctx.Logger.Debug("state", util.PrettyJSON(stateFile))
 		if len(stateFile) != 0 {
 			state := &sync.SyncResponse{}
 			err := json.Unmarshal(stateFile, state)
 			if err != nil {
-				return messages.StateMessage{State: nil, Err: err}
+				return messages.StateMessage{State: nil, Error: err}
 			}
 			m.ctx.Logger.Debug("Found a state file, doing weird mergey shit now")
 			recentUpdates, err := m.ctx.Client.FullSync(context.Background(), sync.WithSyncToken(state.SyncToken))
 			if err != nil {
-				return messages.StateMessage{State: state, Err: err}
+				return messages.StateMessage{State: state, Error: err}
 			}
 			m.ctx.Logger.Debug("Recent state", util.PrettyStruct(recentUpdates))
-			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Err: err}
+			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Error: err}
 		}
 		state, err := m.ctx.Client.FullSync(context.Background())
-		return messages.StateMessage{State: state, Err: err}
+		return messages.StateMessage{State: state, Error: err}
 	}
 }
 
@@ -113,9 +113,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.spinner.Tick
 	case messages.StateMessage:
 		m.ctx.Logger.Debug("StateMessage")
-		if msg.Err != nil {
-			m.ctx.Logger.Debug("Got an error %s", msg.Err.Error())
-			m.errorMessage = fmt.Sprintf("Error getting data from todoist: %s", msg.Err.Error())
+		if msg.Error != nil {
+			m.ctx.Logger.Debug("Got an error %s", msg.Error.Error())
+			m.errorMessage = fmt.Sprintf("Error getting data from todoist: %s", msg.Error.Error())
 			m.loading = false
 			return m, tea.Sequence(tea.Quit)
 		}

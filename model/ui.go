@@ -1,10 +1,10 @@
 package model
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -77,24 +77,13 @@ func New(ctx ctx.Context) *Model {
 	}
 }
 
-type StateMessage struct {
-	state *sync.SyncResponse
-	err   error
-}
-
-func (m *Model) performSync() tea.Cmd {
-	return func() tea.Msg {
-		state, err := m.ctx.Client.FullSync(context.Background())
-		return StateMessage{state, err}
-	}
-}
-
 type SaveAndQuitMsg struct {
 	Error error
 }
 
 func (m *Model) save() tea.Cmd {
 	return func() tea.Msg {
+		m.ctx.Logger.Info("Hey I'm here")
 		state, err := os.Create(filepath.Join(m.ctx.Config.StateDir, "state.json"))
 		if err != nil {
 			m.ctx.Logger.Debug("error creating file", err)
@@ -150,9 +139,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, cmd
 	case messages.StateMessage:
-		if msg.Err == nil {
+		if msg.Error == nil {
 			m.state = msg.State
 		}
+	case messages.OperationResponse:
+		if msg.Error != nil {
+			return m, m.events.Publish(msg.Error.Error(), m.errorStyle, true, 3*time.Second)
+		}
+		m.state = sync.Merge(m.state, msg.State)
 	case tea.KeyMsg:
 		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
@@ -181,6 +175,6 @@ func (m Model) View() string {
 	// case projectView:
 	// 	sections = append(sections, m.projectView.View())
 	// }
-	// sections = append(sections, m.events.View())
+	sections = append(sections, m.events.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

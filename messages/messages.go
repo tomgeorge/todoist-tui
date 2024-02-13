@@ -42,7 +42,13 @@ func Pop() tea.Cmd {
 // A StateMessage is sent back from the client
 type StateMessage struct {
 	State *sync.SyncResponse
-	Err   error
+	Error error
+}
+
+// Returned when an update is sent to the server
+type OperationResponse struct {
+	State *sync.SyncResponse
+	Error error
 }
 
 // Sent after a successful StateMessage to write to the filesystem

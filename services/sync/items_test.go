@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
@@ -102,5 +105,22 @@ func TestAddItem(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReduce(t *testing.T) {
+	type testy struct {
+		Id    string
+		count int
+	}
+	items := []testy{{Id: "1", count: 1}, {Id: "2", count: 2}, {Id: "3", count: 3}}
+	expected := map[string]*testy{"1": &testy{Id: "1", count: 1}, "2": &testy{Id: "2", count: 2}, "3": &testy{Id: "3", count: 3}}
+	got := lo.Reduce(items, func(m map[string]*testy, item testy, _ int) map[string]*testy {
+		ret := m
+		ret[item.Id] = &item
+		return ret
+	}, make(map[string]*testy))
+	if !reflect.DeepEqual(expected, got) {
+		t.Errorf("%s", cmp.Diff(expected, got))
 	}
 }

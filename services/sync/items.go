@@ -117,6 +117,23 @@ type UpdateItemArgs struct {
 	Duration       *types.ItemDuration `json:"duration,omitempty"`
 }
 
+// Move task to a different location, only one of ParentId, SectionId, or
+// ProjectId must be set
+// FIXME: Client code only supports ProjectId atm
+type MoveItemArgs struct {
+	// The ID of the task
+	Id string `json:"id"`
+	// ID of the destination parent task. The task becomes the last child task of
+	// the parent task
+	ParentId string `json:"parent_id,omitempty"`
+	// ID of the destination project. The task becomes the last root task of the
+	// project.
+	ProjectId string `json:"project_id,omitempty"`
+	// ID of the destination section. The task becomes the last root task of the
+	// section
+	SectionId string `json:"section_id,omitempty"`
+}
+
 // Update task attributes. Please note that updating the parent, moving,
 // completing, or uncompleting tasks is not supported by this function, more
 // specific function have to be used instead

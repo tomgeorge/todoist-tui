@@ -511,6 +511,10 @@ func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 }
 
+// FIXME: I don't do any kind of state propgation. Example of what should
+// happen:
+// This might actually be ok because state is kind of flat, and the only thing
+// that would change in e.g. a project move would just change the projectId
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ctx.Logger.Debug("task_create.Update")
 	var cmd tea.Cmd
@@ -719,6 +723,18 @@ func (m *Model) SetDebug(debug bool) {
 
 func (m Model) commands() (sync.CommandList, error) {
 	commands := make(sync.CommandList, 0)
+	selectedProject, ok := m.project.GetSelectedItems()[0].(*types.Project)
+	if ok {
+		//FIXME: I don't do any validation of this, see docstring for MoveItemArgs
+		if m.parentProject.Id != selectedProject.Id {
+			args := sync.MoveItemArgs{
+				Id:        m.task.Id,
+				ProjectId: selectedProject.Id,
+			}
+			commands = append(commands, *sync.NewCommand("item_move", sync.WithArgs(args)))
+		}
+	}
+
 	if m.task != nil {
 		diff, err := m.diff()
 		if err != nil {

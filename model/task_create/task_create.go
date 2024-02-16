@@ -18,7 +18,6 @@ import (
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/date_picker"
-	"github.com/tomgeorge/todoist-tui/model/events"
 	"github.com/tomgeorge/todoist-tui/model/picker"
 	"github.com/tomgeorge/todoist-tui/model/task_description"
 	"github.com/tomgeorge/todoist-tui/model/task_title"
@@ -97,7 +96,6 @@ type Model struct {
 	dueDate       date_picker.Model
 	submit        button.Model
 	cancel        button.Model
-	events        events.Model
 	focused       Section
 	help          help.Model
 	keys          keyMap
@@ -105,7 +103,6 @@ type Model struct {
 	comments      []types.Note
 	parentProject *types.Project
 	taskLabels    []*types.Label
-	showSpinner   bool
 	spinner       spinner.Model
 	debug         bool
 }
@@ -222,7 +219,6 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
 		button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
 	)
-	events := events.New(ctx)
 
 	viewport := viewport.New(initialWidth, initialHeight)
 	model := &Model{
@@ -244,8 +240,6 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		task:          nil,
 		parentProject: nil,
 		taskLabels:    nil,
-		events:        *events,
-		showSpinner:   false,
 		spinner:       spinner.New(spinner.WithSpinner(spinner.Dot)),
 		debug:         defaultDebug,
 	}
@@ -436,62 +430,16 @@ func handleWindowSize(model Model, msg tea.WindowSizeMsg) Model {
 
 func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
 	m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
-	m.showSpinner = true
 	if m.focused == submitSection {
 		if m.task != nil {
-			return m, tea.Batch(m.spinner.Tick, m.UpdateTask())
+			return m, tea.Batch(messages.OperationPending(), m.UpdateTask())
 		}
-		return m, tea.Batch(m.spinner.Tick, m.createTask())
+		return m, tea.Batch(messages.OperationPending(), m.createTask())
 	}
 	if m.focused == cancelSection {
 		return m, messages.Pop()
 	}
 	return m, nil
-}
-
-func handleTaskUpdate(m Model, msg ItemUpdatedMsg) (Model, tea.Cmd) {
-	m.ctx.Logger.Info("Item updated msg %v %v", msg.Task, msg.Error)
-	var event events.NewMessage
-	if msg.Error == nil {
-		event = events.NewMessage{
-			Timeout:  true,
-			Duration: 5 * time.Second,
-			Message:  "Task updated successfully",
-			Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
-		}
-	} else {
-		event = events.NewMessage{
-			Timeout:  true,
-			Duration: 5 * time.Second,
-			Message:  msg.Error.Error(),
-			Style:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
-		}
-	}
-	m.showSpinner = false
-	// have to reset the spinner or we'll be inundated with tick messages if we
-	// stay on this screen
-	m.spinner = spinner.New(spinner.WithSpinner(spinner.Dot))
-	return m, m.events.Publish(event.Message, event.Style, event.Timeout, event.Duration)
-}
-
-func handleTaskCreated(m Model, msg messages.TaskCreatedMessage) (Model, tea.Cmd) {
-	m.ctx.Logger.Debug("Item created message")
-	m.showSpinner = false
-	m.spinner = spinner.New(spinner.WithSpinner(spinner.Dot))
-	if msg.Error != nil {
-		return m, m.events.Publish(
-			fmt.Sprintf("Failed to create task: %s", msg.Error.Error()),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")),
-			true,
-			5*time.Second,
-		)
-	}
-	return m, m.events.Publish(
-		"Task created",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")),
-		true,
-		5*time.Second,
-	)
 }
 
 // Check if any part of the model is in an editing state
@@ -570,10 +518,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case button.SubmitMsg:
 		return handleSubmit(m, msg)
-	case ItemUpdatedMsg:
-		return handleTaskUpdate(m, msg)
-	case messages.TaskCreatedMessage:
-		return handleTaskCreated(m, msg)
 	case tea.WindowSizeMsg:
 		return handleWindowSize(m, msg), nil
 	case tea.KeyMsg:
@@ -616,7 +560,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.spinner, cmd = m.spinner.Update(msg)
 	cmds = append(cmds, cmd)
 
-	m.events, cmd = m.events.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
@@ -763,10 +706,6 @@ func (m Model) View() string {
 		}
 	}
 	sections = append(sections, m.help.View(m.keys))
-	if m.showSpinner {
-		sections = append(sections, m.spinner.View())
-	}
-	sections = append(sections, m.events.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
@@ -798,7 +737,6 @@ func (m *Model) DebugInfo() string {
 	sections = append(sections, fmt.Sprintf("width %d", m.width))
 	sections = append(sections, fmt.Sprintf("height %d", m.height))
 	sections = append(sections, fmt.Sprintf("focused section - zero indexed %d", m.focused))
-	sections = append(sections, fmt.Sprintf("showSpinner %t", m.showSpinner))
 	commands, err := m.commands()
 	if err != nil {
 	}
@@ -891,13 +829,23 @@ func (m *Model) UpdateTask() tea.Cmd {
 		commands, err := m.commands()
 		request := m.ctx.Client.NewSyncRequest([]string{"items"}, commands)
 		response, err := m.ctx.Client.Sync(context.Background(), *request)
-		return messages.OperationResponse{State: response, Error: err}
+		return messages.OperationResponse{
+			State:    response,
+			Commands: commands,
+			Error:    err,
+		}
 	}
 }
 
 func (m *Model) createTask() tea.Cmd {
 	return func() tea.Msg {
-		task, err := m.ctx.Client.AddTask(context.Background(), m.getTaskContent())
-		return messages.TaskCreatedMessage{Task: task, Error: err}
+		commands, err := m.commands()
+		request := m.ctx.Client.NewSyncRequest([]string{"items"}, commands)
+		response, err := m.ctx.Client.Sync(context.Background(), *request)
+		return messages.OperationResponse{
+			State:    response,
+			Commands: commands,
+			Error:    err,
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -45,10 +46,39 @@ type StateMessage struct {
 	Error error
 }
 
+func TaskOperation(client *sync.Client, commands sync.CommandList) tea.Cmd {
+	return func() tea.Msg {
+		request := client.NewSyncRequest([]string{"items"}, commands)
+		response, err := client.Sync(context.Background(), *request)
+		return OperationResponse{
+			State:    response,
+			Commands: commands,
+			Error:    err,
+		}
+	}
+}
+
+type OperationPendingMessage struct{}
+
+func OperationPending() tea.Cmd {
+	return func() tea.Msg {
+		return OperationPendingMessage{}
+	}
+}
+
+type OperationCompleteMessage struct{}
+
+func OperationComplete() tea.Cmd {
+	return func() tea.Msg {
+		return OperationCompleteMessage{}
+	}
+}
+
 // Returned when an update is sent to the server
 type OperationResponse struct {
-	State *sync.SyncResponse
-	Error error
+	State    *sync.SyncResponse
+	Commands []sync.Command
+	Error    error
 }
 
 // Sent after a successful StateMessage to write to the filesystem

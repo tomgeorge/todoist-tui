@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/events"
@@ -37,6 +39,8 @@ type Model struct {
 	loading      bool
 	loadingError string
 	errorStyle   lipgloss.Style
+	successStyle lipgloss.Style
+	showSpinner  bool
 	spinner      spinner.Model
 	state        *sync.SyncResponse
 	ctx          ctx.Context
@@ -54,26 +58,29 @@ type Model struct {
 
 func New(ctx ctx.Context) *Model {
 	const (
-		defaultLoading = true
-		defaultWidth   = 50
-		defaultHeight  = 50
+		defaultLoading     = true
+		defaultWidth       = 50
+		defaultHeight      = 50
+		defaultShowSpinner = false
 	)
 	return &Model{
-		loading:    defaultLoading,
-		errorStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#ed8796")),
-		spinner:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#939ab7")))),
-
-		state:       nil,
-		ctx:         ctx,
-		events:      *events.New(ctx),
-		project:     nil,
-		projects:    nil,
-		tasks:       nil,
-		labels:      nil,
-		projectView: project_view.Model{},
-		taskCreate:  task_create.Model{},
-		width:       defaultWidth,
-		height:      defaultHeight,
+		loading: defaultLoading,
+		//FIXME: These need to go in the theme
+		errorStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#ed8796")),
+		successStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#a6d189")),
+		spinner:      spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#939ab7")))),
+		showSpinner:  defaultShowSpinner,
+		state:        nil,
+		ctx:          ctx,
+		events:       *events.New(ctx),
+		project:      nil,
+		projects:     nil,
+		tasks:        nil,
+		labels:       nil,
+		projectView:  project_view.Model{},
+		taskCreate:   task_create.Model{},
+		width:        defaultWidth,
+		height:       defaultHeight,
 	}
 }
 
@@ -106,10 +113,6 @@ func (m *Model) save() tea.Cmd {
 
 type StartSpinnerMessage struct{}
 
-func startSpinner() tea.Cmd {
-	return func() tea.Msg { return StartSpinnerMessage{} }
-}
-
 func (m Model) Init() tea.Cmd {
 	return messages.Push("loading", loading.New(m.ctx))
 }
@@ -138,15 +141,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, cmd
+	case messages.OperationPendingMessage:
+		m.showSpinner = true
+		cmds = append(cmds, m.spinner.Tick)
 	case messages.StateMessage:
 		if msg.Error == nil {
 			m.state = msg.State
 		}
 	case messages.OperationResponse:
+		m.showSpinner = false
 		if msg.Error != nil {
 			return m, m.events.Publish(msg.Error.Error(), m.errorStyle, true, 3*time.Second)
+		} else {
+			m.state = sync.Merge(m.state, msg.State)
+			types := lo.Map(msg.Commands, func(c sync.Command, _ int) string { return c.Type })
+			return m, m.events.Publish(
+				fmt.Sprintf("Command(s) succeeded: %s", types),
+				m.successStyle,
+				true,
+				3*time.Second)
 		}
-		m.state = sync.Merge(m.state, msg.State)
 	case tea.KeyMsg:
 		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
@@ -159,6 +173,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.stack[lastModel].Model, cmd = m.stack[lastModel].Model.Update(msg)
 	cmds = append(cmds, cmd)
 	m.events, cmd = m.events.Update(msg)
+	cmds = append(cmds, cmd)
+	m.spinner, cmd = m.spinner.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
@@ -175,6 +191,9 @@ func (m Model) View() string {
 	// case projectView:
 	// 	sections = append(sections, m.projectView.View())
 	// }
+	if m.showSpinner {
+		sections = append(sections, m.spinner.View())
+	}
 	sections = append(sections, m.events.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

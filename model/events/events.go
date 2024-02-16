@@ -19,6 +19,7 @@ type Model struct {
 
 type Event struct {
 	Timer   timer.Model
+	Ticks   int
 	Timeout bool
 	Message string
 	Style   lipgloss.Style
@@ -59,6 +60,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			Message: msg.Message,
 			Style:   msg.Style,
 			Timer:   timer,
+			Ticks:   0,
 		}
 		m.Ctx.Logger.Infof("events - NewMessage timeout? %b", event.Timeout)
 		m.Events = append(m.Events, event)
@@ -72,6 +74,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if event.Timer.ID() == msg.ID {
 				updated, cmd := event.Timer.Update(msg)
 				m.Events[i].Timer = updated
+				m.Events[i].Ticks++
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -91,7 +94,9 @@ func (m Model) View() string {
 	}
 	var sb strings.Builder
 	for _, event := range m.Events {
-		sb.WriteString(fmt.Sprintf("%s %s\n", event.Style.Render(event.Message), event.Timer.Timeout))
+		ellipsis := strings.Repeat(".", event.Ticks)
+		message := fmt.Sprintf("%s%s", event.Message, ellipsis)
+		sb.WriteString(fmt.Sprintf("%s\n", event.Style.Render(message)))
 	}
 	return sb.String()
 }

@@ -70,7 +70,7 @@ func (m *Model) performSync() tea.Cmd {
 		if err != nil && !os.IsNotExist(err) {
 			return messages.StateMessage{State: nil, Error: err}
 		}
-		m.ctx.Logger.Debug("state", util.PrettyJSON(stateFile))
+		m.ctx.Logger.Debugf("found a state file:\n---\n%s\n---\n", util.PrettyJSON(stateFile))
 		if len(stateFile) != 0 {
 			state := &sync.SyncResponse{}
 			err := json.Unmarshal(stateFile, state)
@@ -83,7 +83,7 @@ func (m *Model) performSync() tea.Cmd {
 				return messages.StateMessage{State: state, Error: err}
 			}
 			m.ctx.Logger.Debug("Recent state", util.PrettyStruct(recentUpdates))
-			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Error: err}
+			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Error: nil}
 		}
 		state, err := m.ctx.Client.FullSync(context.Background())
 		return messages.StateMessage{State: state, Error: err}

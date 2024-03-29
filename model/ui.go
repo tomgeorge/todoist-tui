@@ -146,11 +146,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.state = sync.Merge(m.state, msg.State)
 			types := lo.Map(msg.Commands, func(c sync.Command, _ int) string { return c.Type })
-			return m, m.events.Publish(
+			eventCmd := m.events.Publish(
 				fmt.Sprintf("Command(s) succeeded: %s", types),
 				m.successStyle,
 				true,
 				3*time.Second)
+			return m, tea.Batch(eventCmd, messages.StateUpdated)
+		}
+	case messages.StateUpdatedMessage:
+		for i, stackItem := range m.stack {
+			if stackItem.Id == "project_view" {
+				m.stack[i] = StackItem{Id: "project_view", Model: *project_view.NewFromState(m.ctx, m.state)}
+			}
 		}
 	case tea.KeyMsg:
 		m.ctx.Logger.Debug("KeyMsg")

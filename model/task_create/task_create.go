@@ -96,7 +96,8 @@ type Model struct {
 	dueDate       date_picker.Model
 	submit        button.Model
 	cancel        button.Model
-	focused       Section
+	focused       bool
+	focusIndex    Section
 	help          help.Model
 	keys          keyMap
 	task          *types.Item
@@ -118,10 +119,11 @@ const (
 	prioritySection
 	submitSection
 	cancelSection
-	lastSection   = cancelSection
-	initialWidth  = 50
-	initialHeight = 50
-	defaultDebug  = false
+	lastSection    = cancelSection
+	initialWidth   = 50
+	initialHeight  = 50
+	defaultDebug   = false
+	defaultFocused = false
 )
 
 type ModelOption func(*Model)
@@ -234,7 +236,8 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		labels:        *labels,
 		submit:        *submit,
 		cancel:        *cancel,
-		focused:       titleSection,
+		focusIndex:    titleSection,
+		focused:       defaultFocused,
 		help:          help.New(),
 		keys:          defaultKeys,
 		task:          nil,
@@ -355,7 +358,7 @@ func (m Model) Init() tea.Cmd {
 // 5. Labels
 // 6. Submit
 func (m *Model) HandleScrollDown() {
-	switch m.focused {
+	switch m.focusIndex {
 	case titleSection:
 		m.title.FocusOff()
 		m.project.FocusOn()
@@ -378,11 +381,11 @@ func (m *Model) HandleScrollDown() {
 		m.submit.SetFocus(false)
 		m.cancel.SetFocus(true)
 	}
-	m.focused++
+	m.focusIndex++
 }
 
 func (m *Model) HandleScrollUp() {
-	switch m.focused {
+	switch m.focusIndex {
 	case projectSection:
 		m.project.FocusOff()
 		m.title.FocusOn()
@@ -405,7 +408,7 @@ func (m *Model) HandleScrollUp() {
 		m.cancel.SetFocus(false)
 		m.submit.SetFocus(true)
 	}
-	m.focused--
+	m.focusIndex--
 }
 
 // Update the help status of all children
@@ -430,13 +433,13 @@ func handleWindowSize(model Model, msg tea.WindowSizeMsg) Model {
 
 func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
 	m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
-	if m.focused == submitSection {
+	if m.focusIndex == submitSection {
 		if m.task != nil {
 			return m, tea.Batch(messages.OperationPending(), m.UpdateTask())
 		}
 		return m, tea.Batch(messages.OperationPending(), m.createTask())
 	}
-	if m.focused == cancelSection {
+	if m.focusIndex == cancelSection {
 		return m, messages.Pop()
 	}
 	return m, nil
@@ -485,24 +488,24 @@ func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.ScrollDown):
-		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focused)
-		if m.focused != lastSection {
+		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focusIndex)
+		if m.focusIndex != lastSection {
 			m.HandleScrollDown()
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.ScrollUp):
-		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focused)
-		if m.focused > 0 {
+		m.ctx.Logger.Infof("Scroll request, focused is %d", m.focusIndex)
+		if m.focusIndex > 0 {
 			m.HandleScrollUp()
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.ScrollLeft):
-		if m.focused == cancelSection {
+		if m.focusIndex == cancelSection {
 			m.HandleScrollUp()
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.ScrollRight):
-		if m.focused == submitSection {
+		if m.focusIndex == submitSection {
 			m.HandleScrollDown()
 		}
 		return m, nil
@@ -515,6 +518,9 @@ func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 // happen:
 // This might actually be ok because state is kind of flat, and the only thing
 // that would change in e.g. a project move would just change the projectId
+//
+// UPDATE: yeah this doesn't work. Move a task from one project to another and
+// hit backspace, it shows up as a child of the selected project still
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ctx.Logger.Debug("task_create.Update")
 	var cmd tea.Cmd
@@ -529,7 +535,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	switch m.focused {
+	switch m.focusIndex {
 	case titleSection:
 		m.title, cmd = m.title.Update(msg)
 		cmds = append(cmds, cmd)
@@ -571,31 +577,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 type selectedFunc func(m *Model) bool
 
 func titleSelected(m *Model) bool {
-	return m.focused == titleSection
+	return m.focusIndex == titleSection
 }
 
 func descriptionSelected(m *Model) bool {
-	return m.focused == descriptionSection
+	return m.focusIndex == descriptionSection
 }
 
 func dueDateSelected(m *Model) bool {
-	return m.focused == dueSection
+	return m.focusIndex == dueSection
 }
 
 func labelsSelected(m *Model) bool {
-	return m.focused == labelsSection
+	return m.focusIndex == labelsSection
 }
 
 func prioritySelected(m *Model) bool {
-	return m.focused == prioritySection
+	return m.focusIndex == prioritySection
 }
 
 func submitSelected(m *Model) bool {
-	return m.focused == submitSection
+	return m.focusIndex == submitSection
 }
 
 func projectsSelected(m *Model) bool {
-	return m.focused == projectSection
+	return m.focusIndex == projectSection
 }
 
 func (m *Model) renderContent(isSelected selectedFunc, fullWidth bool, content string) string {
@@ -675,11 +681,11 @@ func (m Model) View() string {
 		lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			m.renderContent(submitSelected, false, m.submit.View()),
-			m.renderContent(func(m *Model) bool { return m.focused == cancelSection }, false, m.cancel.View()),
+			m.renderContent(func(m *Model) bool { return m.focusIndex == cancelSection }, false, m.cancel.View()),
 		),
 	)
 
-	switch m.focused {
+	switch m.focusIndex {
 	case titleSection:
 		if m.title.Help().ShowAll {
 			sections = append(sections, m.title.Help().View(m.title.HelpKeys()))
@@ -752,7 +758,7 @@ func (m *Model) DebugInfo() string {
 	sections = append(sections, "task_create - debug information")
 	sections = append(sections, fmt.Sprintf("width %d", m.width))
 	sections = append(sections, fmt.Sprintf("height %d", m.height))
-	sections = append(sections, fmt.Sprintf("focused section - zero indexed %d", m.focused))
+	sections = append(sections, fmt.Sprintf("focused section - zero indexed %d", m.focusIndex))
 	commands, err := m.commands()
 	if err != nil {
 	}
@@ -864,4 +870,12 @@ func (m *Model) createTask() tea.Cmd {
 			Error:    err,
 		}
 	}
+}
+
+func (m *Model) SetFocused(focused bool) {
+	m.focused = focused
+}
+
+func (m Model) Focused() bool {
+	return m.focused
 }

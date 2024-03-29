@@ -15,6 +15,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
+	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/theme"
 	"github.com/tomgeorge/todoist-tui/types"
 )
@@ -95,6 +96,13 @@ func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Ite
 	} else {
 		fmt.Fprint(w, d.theme.Blurred.Base.Render(i.Content))
 	}
+}
+
+func NewFromState(ctx ctx.Context, state *sync.SyncResponse) *Model {
+	tasks := lo.Filter(state.Items, func(i *types.Item, _ int) bool {
+		return i.ProjectId == state.Projects[0].Id
+	})
+	return New(ctx, state.Projects[0], tasks, state.Labels, state.Projects)
 }
 
 func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []*types.Label, projects []*types.Project, opts ...ModelOption) *Model {

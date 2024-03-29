@@ -21,14 +21,6 @@ import (
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
-type ViewIndex int
-
-const (
-	// loading     ViewIndex = iota
-	projectView ViewIndex = iota
-	taskCreate  ViewIndex = iota
-)
-
 type StackItem struct {
 	Id    string
 	Model tea.Model
@@ -51,7 +43,6 @@ type Model struct {
 	projects     []*types.Project
 	projectView  project_view.Model
 	taskCreate   task_create.Model
-	index        ViewIndex
 	width        int
 	height       int
 }
@@ -185,12 +176,6 @@ func (m Model) View() string {
 	}
 	var sections []string
 	sections = append(sections, m.stack[len(m.stack)-1].Model.View())
-	// switch m.index {
-	// case taskCreate:
-	// 	sections = append(sections, m.taskCreate.View())
-	// case projectView:
-	// 	sections = append(sections, m.projectView.View())
-	// }
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}

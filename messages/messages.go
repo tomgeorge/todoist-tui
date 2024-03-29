@@ -46,6 +46,13 @@ type StateMessage struct {
 	Error error
 }
 
+func StateUpdated() tea.Msg {
+	return StateUpdatedMessage{}
+}
+
+// The state was updated and the view should redraw itself
+type StateUpdatedMessage struct{}
+
 func TaskOperation(client *sync.Client, commands sync.CommandList) tea.Cmd {
 	return func() tea.Msg {
 		request := client.NewSyncRequest([]string{"items"}, commands)

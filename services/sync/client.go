@@ -909,8 +909,8 @@ type SyncResponse struct {
 //
 // FIXME: See how todoist handles reaping these tasks
 func Merge(oldState, newState *SyncResponse) *SyncResponse {
-	lo.Reduce(oldState.Items, func(m map[string]*types.Item, item *types.Item, _ int) map[string]*types.Item {
-		ret := m
+	lo.Reduce(oldState.Items, func(agg map[string]*types.Item, item *types.Item, _ int) map[string]*types.Item {
+		ret := agg
 		ret[item.Id] = item
 		return ret
 	}, make(map[string]*types.Item))

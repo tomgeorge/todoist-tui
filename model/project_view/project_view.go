@@ -106,10 +106,10 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		items = append(items, task)
 	}
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(2)
-	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(2)
+	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
+	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
 	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(2)
+	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1)
 
 	list := list.New(items, delegate, 50, 50)
 	list.Title = project.Name

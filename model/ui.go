@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,22 +82,26 @@ type SaveAndQuitMsg struct {
 
 func (m *Model) save() tea.Cmd {
 	return func() tea.Msg {
-		m.ctx.Logger.Info("Hey I'm here")
+		if _, err := os.Stat(m.ctx.Config.StateDir); errors.Is(err, os.ErrNotExist) {
+			if err = os.Mkdir(m.ctx.Config.StateDir, 0755); err != nil {
+				return SaveAndQuitMsg{Error: fmt.Errorf("saving state file: %v", err)}
+			}
+		}
 		state, err := os.Create(filepath.Join(m.ctx.Config.StateDir, "state.json"))
 		if err != nil {
 			m.ctx.Logger.Debug("error creating file", err)
-			return SaveAndQuitMsg{Error: err}
+			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
 		}
 		defer state.Close()
 		json, err := json.MarshalIndent(m.state, "", "  ")
 		if err != nil {
 			m.ctx.Logger.Debug("error marshalling json", err)
-			return SaveAndQuitMsg{Error: err}
+			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
 		}
 		_, err = state.Write(json)
 		if err != nil {
 			m.ctx.Logger.Debug("writing file", err)
-			return SaveAndQuitMsg{Error: err}
+			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
 		}
 		return SaveAndQuitMsg{Error: nil}
 	}
@@ -163,8 +168,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
 		case "ctrl+c":
-			return m, tea.Sequence(m.save(), tea.Quit)
+			return m, m.save()
 		}
+	case SaveAndQuitMsg:
+		m.ctx.Logger.Debug("caught a save and quit message")
+		if msg.Error != nil {
+			failed := m.events.Publish(msg.Error.Error(), m.errorStyle, false, 0)
+			return m, tea.Sequence(failed, tea.Quit)
+		}
+		return m, tea.Sequence(tea.Quit)
 	}
 	m.ctx.Logger.Infof("Updating %s", m.stack[len(m.stack)-1].Id)
 	lastModel := len(m.stack) - 1
@@ -188,4 +200,8 @@ func (m Model) View() string {
 	}
 	sections = append(sections, m.events.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m Model) Events() events.Model {
+	return m.events
 }

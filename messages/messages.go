@@ -128,3 +128,22 @@ type TaskCreatedMessage struct {
 	Task  *types.Item
 	Error error
 }
+
+func OpenDrawer() tea.Msg {
+	return OpenDrawerMessage{}
+}
+
+type OpenDrawerMessage struct {
+}
+
+type ChangeProjectDirection string
+
+const NextProject ChangeProjectDirection = "forward"
+const PreviousProject ChangeProjectDirection = "backwards"
+
+// Send to ask the UI to change the currently shown project, should only be sent
+// from the project view component
+type ChangeProjectMessage struct {
+	From      *types.Project
+	Direction ChangeProjectDirection
+}

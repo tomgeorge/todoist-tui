@@ -14,7 +14,9 @@ import (
 	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
+	"github.com/tomgeorge/todoist-tui/model/drawer"
 	"github.com/tomgeorge/todoist-tui/model/events"
+	"github.com/tomgeorge/todoist-tui/model/footer"
 	"github.com/tomgeorge/todoist-tui/model/loading"
 	"github.com/tomgeorge/todoist-tui/model/project_view"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
@@ -23,29 +25,30 @@ import (
 )
 
 type StackItem struct {
-	Id    string
 	Model tea.Model
+	Id    string
 }
 
 type Model struct {
-	stack        []StackItem
-	loading      bool
-	loadingError string
+	events       events.Model
+	ctx          ctx.Context
+	footer       footer.Model
+	project      *types.Project
+	state        *sync.SyncResponse
 	errorStyle   lipgloss.Style
 	successStyle lipgloss.Style
-	showSpinner  bool
-	spinner      spinner.Model
-	state        *sync.SyncResponse
-	ctx          ctx.Context
-	events       events.Model
-	project      *types.Project
+	projects     []*types.Project
 	tasks        []*types.Item
 	labels       []*types.Label
-	projects     []*types.Project
+	stack        []StackItem
 	projectView  project_view.Model
+	drawer       drawer.Model
+	spinner      spinner.Model
 	taskCreate   task_create.Model
 	width        int
 	height       int
+	showSpinner  bool
+	loading      bool
 }
 
 func New(ctx ctx.Context) *Model {
@@ -73,6 +76,7 @@ func New(ctx ctx.Context) *Model {
 		taskCreate:   task_create.Model{},
 		width:        defaultWidth,
 		height:       defaultHeight,
+		footer:       footer.New(ctx),
 	}
 }
 
@@ -90,18 +94,18 @@ func (m *Model) save() tea.Cmd {
 		state, err := os.Create(filepath.Join(m.ctx.Config.StateDir, "state.json"))
 		if err != nil {
 			m.ctx.Logger.Debug("error creating file", err)
-			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
+			return SaveAndQuitMsg{Error: fmt.Errorf("error saving state file: %v", err)}
 		}
 		defer state.Close()
 		json, err := json.MarshalIndent(m.state, "", "  ")
 		if err != nil {
 			m.ctx.Logger.Debug("error marshalling json", err)
-			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
+			return SaveAndQuitMsg{Error: fmt.Errorf("error saving state file: %v", err)}
 		}
 		_, err = state.Write(json)
 		if err != nil {
 			m.ctx.Logger.Debug("writing file", err)
-			return SaveAndQuitMsg{Error: fmt.Errorf("Error saving state file: %v", err)}
+			return SaveAndQuitMsg{Error: fmt.Errorf("error saving state file: %v", err)}
 		}
 		return SaveAndQuitMsg{Error: nil}
 	}
@@ -118,7 +122,7 @@ func push(m Model, msg messages.PushMessage) (Model, tea.Cmd) {
 	return m, m.stack[len(m.stack)-1].Model.Init()
 }
 
-func pop(m Model, msg messages.PopMessage) (Model, tea.Cmd) {
+func pop(m Model, _ messages.PopMessage) (Model, tea.Cmd) {
 	m.stack = m.stack[:len(m.stack)-1]
 	return m, nil
 }
@@ -127,6 +131,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
+	case messages.OpenDrawerMessage:
+		pickables := make([]drawer.Pickable, len(m.state.Projects))
+		for i, project := range m.state.Projects {
+			pickables[i] = project
+		}
+		m.drawer = drawer.New(pickables)
+		return m, nil
 	case messages.PushMessage:
 		m.ctx.Logger.Debug("PushMessage")
 		return push(m, msg)
@@ -164,9 +175,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.stack[i] = StackItem{Id: "project_view", Model: *project_view.NewFromState(m.ctx, m.state)}
 			}
 		}
+
+	case messages.ChangeProjectMessage:
+		// FIXME: I actually have the whole list of projects in the project view
+		// model so I could probably do this calculation in there when sending the
+		// message and send back the destination index
+		currentProjectIndex := lo.IndexOf(m.state.Projects, msg.From)
+		var newProjectIndex int
+		switch currentProjectIndex {
+		// FIXME: this should never happen and I should maybe do something if it happens
+		case -1:
+			return m, nil
+		case 0:
+			if msg.Direction == messages.NextProject {
+				newProjectIndex = currentProjectIndex + 1
+			} else {
+				newProjectIndex = len(m.state.Projects) - 1
+			}
+		case len(m.state.Projects) - 1:
+			if msg.Direction == messages.NextProject {
+				newProjectIndex = 0
+			} else {
+				newProjectIndex = currentProjectIndex - 1
+			}
+		default:
+			if msg.Direction == messages.NextProject {
+				newProjectIndex = currentProjectIndex + 1
+			} else {
+				newProjectIndex = currentProjectIndex - 1
+			}
+		}
+		m.ctx.Logger.Debugf("length: %d, project: %s current index: %d direction: %s, new index: %d",
+			len(m.state.Projects),
+			msg.From.Name,
+			currentProjectIndex,
+			msg.Direction,
+			newProjectIndex,
+		)
+		tasks := lo.Filter(m.state.Items, func(i *types.Item, _ int) bool {
+			return i.ProjectId == m.state.Projects[newProjectIndex].Id
+		})
+		projects := project_view.New(
+			m.ctx,
+			m.state.Projects[newProjectIndex],
+			tasks,
+			m.state.Labels,
+			m.state.Projects,
+		)
+		m.ctx.Logger.Debug("got project change message", "new index", newProjectIndex, "project name", m.state.Projects[newProjectIndex].Name)
+		return m, tea.Sequence(messages.Pop(), messages.Push("project_view", projects))
+
 	case tea.KeyMsg:
 		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
+		case "ctrl+p":
+			return m, messages.OpenDrawer
 		case "ctrl+c":
 			return m, m.save()
 		}
@@ -198,7 +261,13 @@ func (m Model) View() string {
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}
+	if m.drawer.Enabled() {
+		sections = append(sections, m.drawer.View())
+	}
 	sections = append(sections, m.events.View())
+	if !m.showSpinner {
+		sections = append(sections, m.footer.View())
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 

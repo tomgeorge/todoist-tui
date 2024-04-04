@@ -213,6 +213,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		button.WithEnabled(true),
 		button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
 		button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+		button.WithDisabledStyle(ctx.Theme.Blurred.DisabledButton),
 	)
 
 	cancel := button.New(
@@ -220,6 +221,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 		button.WithEnabled(true),
 		button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
 		button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+		button.WithDisabledStyle(ctx.Theme.Blurred.DisabledButton),
 	)
 
 	viewport := viewport.New(initialWidth, initialHeight)
@@ -347,7 +349,14 @@ func WithPriorities(priorities []types.Priority) ModelOption {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return func() tea.Msg {
+		if submittable(m) {
+			m.submit.SetEnabled(true)
+		} else {
+			m.submit.SetEnabled(false)
+		}
+		return 0
+	}
 }
 
 // Order
@@ -514,6 +523,13 @@ func handleKeyPress(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 }
 
+func submittable(m Model) bool {
+	if m.getTaskContent().Content == "" {
+		return false
+	}
+	return true
+}
+
 // FIXME: I don't do any kind of state propgation. Example of what should
 // happen:
 // This might actually be ok because state is kind of flat, and the only thing
@@ -525,6 +541,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ctx.Logger.Debug("task_create.Update")
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
+
+	if !submittable(m) {
+		m.submit.SetEnabled(false)
+	} else {
+		m.submit.SetEnabled(true)
+	}
 	switch msg := msg.(type) {
 	case button.SubmitMsg:
 		return handleSubmit(m, msg)

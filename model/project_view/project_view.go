@@ -1,8 +1,6 @@
 package project_view
 
 import (
-	"fmt"
-	"io"
 	"slices"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -16,16 +14,18 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
 	"github.com/tomgeorge/todoist-tui/services/sync"
-	"github.com/tomgeorge/todoist-tui/theme"
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
 type keyMap struct {
-	ScrollUp   key.Binding
-	ScrollDown key.Binding
-	Help       key.Binding
-	Confirm    key.Binding
-	Quit       key.Binding
+	ScrollUp        key.Binding
+	ScrollDown      key.Binding
+	NextProject     key.Binding
+	PreviousProject key.Binding
+	Help            key.Binding
+	Confirm         key.Binding
+	Choose          key.Binding
+	Quit            key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -33,7 +33,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 }
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.ScrollUp, k.ScrollUp, k.Confirm},
+		{k.ScrollUp, k.ScrollUp, k.Confirm, k.Choose},
 		{k.Help, k.Quit},
 	}
 }
@@ -47,6 +47,14 @@ var defaultKeys = keyMap{
 		key.WithKeys("ctrl+j", "down"),
 		key.WithHelp("ctrl+j", "scroll down"),
 	),
+	NextProject: key.NewBinding(
+		key.WithKeys("ctrl+l"),
+		key.WithHelp("ctrl+l", "next project"),
+	),
+	PreviousProject: key.NewBinding(
+		key.WithKeys("ctrl+h"),
+		key.WithHelp("ctrl+h", "previous project"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("ctrl+_"),
 		key.WithKeys("ctrl+?", "help"),
@@ -55,6 +63,10 @@ var defaultKeys = keyMap{
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "confirm"),
 	),
+	Choose: key.NewBinding(
+		key.WithKeys("P"),
+		key.WithHelp("P", "Quick choose project"),
+	),
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
 		key.WithKeys("ctrl+c", "quit"),
@@ -62,40 +74,36 @@ var defaultKeys = keyMap{
 }
 
 type Model struct {
+	list        list.Model
 	ctx         ctx.Context
-	help        help.Model
-	keys        keyMap
 	project     *types.Project
+	create      *button.Model
+	help        help.Model
+	titleStyle  lipgloss.Style
+	keys        keyMap
 	tasks       []*types.Item
 	allLabels   []*types.Label
 	allProjects []*types.Project
-	titleStyle  lipgloss.Style
-	list        list.Model
-	create      *button.Model
 	focused     bool
 }
 
 type ModelOption func(m *Model)
 
-type delegate struct {
-	theme *theme.Theme
+func NewListDelegate(ctx ctx.Context) list.DefaultDelegate {
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
+	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
+	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
+	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1)
+	return delegate
 }
 
-func (d delegate) Height() int                             { return 1 }
-func (d delegate) Spacing() int                            { return 0 }
-func (d delegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(*types.Item)
-	if !ok {
-		return
-	}
-	if i.Checked && index == m.Index() {
-		fmt.Fprint(w, d.theme.Focused.Base.Render(i.Content))
-	} else if i.Checked {
-		fmt.Fprint(w, d.theme.Blurred.Base.Copy().Strikethrough(true).Render(i.Content))
-	} else {
-		fmt.Fprint(w, d.theme.Blurred.Base.Render(i.Content))
-	}
+func NewList(ctx ctx.Context, items []list.Item, title string, width int, height int, delegate list.DefaultDelegate) list.Model {
+	list := list.New(items, delegate, width, height)
+	list.Title = title
+	list.Styles.Title = ctx.Theme.Focused.Title
+	list.SetShowHelp(false)
+	return list
 }
 
 func NewFromState(ctx ctx.Context, state *sync.SyncResponse) *Model {
@@ -113,15 +121,8 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 	for _, task := range tasks {
 		items = append(items, task)
 	}
-	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
-	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
-	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1)
-
-	list := list.New(items, delegate, 50, 50)
-	list.Title = project.Name
-	list.Styles.Title = lipgloss.NewStyle().Foreground(lipgloss.Color("#81c8be"))
+	delegate := NewListDelegate(ctx)
+	list := NewList(ctx, items, project.Name, 50, 50, delegate)
 	m := &Model{
 		ctx:         ctx,
 		help:        help.New(),
@@ -181,11 +182,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				task_create.WithProjects(m.allProjects),
 			)
 			return m, messages.Push("task_create", taskModel)
+		case key.Matches(msg, m.keys.NextProject):
+			return m, changeProject(m.project, messages.NextProject)
+		case key.Matches(msg, m.keys.PreviousProject):
+			return m, changeProject(m.project, messages.PreviousProject)
 		}
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
+}
+
+func changeProject(project *types.Project, direction messages.ChangeProjectDirection) tea.Cmd {
+	return func() tea.Msg {
+		return messages.ChangeProjectMessage{
+			From:      project,
+			Direction: direction,
+		}
+	}
 }
 
 func (m Model) View() string {

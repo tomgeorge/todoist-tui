@@ -78,3 +78,7 @@ func (p Project) Style() lipgloss.Style {
 func (p Project) GetFormData() interface{} {
 	return p.Id
 }
+
+func (p Project) Info() string {
+	return p.Name
+}

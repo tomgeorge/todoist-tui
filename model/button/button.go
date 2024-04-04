@@ -136,7 +136,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.Confirm):
+		case key.Matches(msg, m.keys.Confirm) && m.enabled:
 			return m, m.onSubmit("okey dokey")
 		}
 	}
@@ -151,8 +151,18 @@ func (m Model) Focused() bool {
 	return m.focused
 }
 
+func (m Model) Enabled() bool {
+	return m.enabled
+}
+
+func (m *Model) SetEnabled(enabled bool) {
+	m.enabled = enabled
+}
+
 func (m Model) View() string {
 	switch {
+	case !m.enabled:
+		return lipgloss.NewStyle().PaddingLeft(2).Render(m.disabledStyle.Render(m.text))
 	case m.focused:
 		return lipgloss.NewStyle().PaddingLeft(2).Render(m.focusedStyle.Render(m.text))
 	default:

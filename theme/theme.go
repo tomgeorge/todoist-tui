@@ -40,8 +40,9 @@ type FieldStyles struct {
 	TextInput TextInputStyles
 
 	// Confirm styles.
-	FocusedButton lipgloss.Style
-	BlurredButton lipgloss.Style
+	FocusedButton  lipgloss.Style
+	BlurredButton  lipgloss.Style
+	DisabledButton lipgloss.Style
 
 	// Card styles.
 	Card      lipgloss.Style
@@ -66,6 +67,7 @@ func (f FieldStyles) copy() FieldStyles {
 		UnselectedPrefix:    f.UnselectedPrefix.Copy(),
 		FocusedButton:       f.FocusedButton.Copy(),
 		BlurredButton:       f.BlurredButton.Copy(),
+		DisabledButton:      f.DisabledButton.Copy(),
 		TextInput:           f.TextInput.copy(),
 		Card:                f.Card.Copy(),
 		NoteTitle:           f.NoteTitle.Copy(),
@@ -153,6 +155,9 @@ func ThemeBase() *Theme {
 	f.BlurredButton = button.Copy().
 		Foreground(lipgloss.Color("7")).
 		Background(lipgloss.Color("0"))
+	f.DisabledButton = button.Copy().
+		Foreground(lipgloss.Color("7")).
+		Background(lipgloss.Color("0"))
 	f.TextInput.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	t.Help = help.New().Styles
@@ -200,6 +205,7 @@ func ThemeCatppuccin() *Theme {
 	f.UnselectedOption.Foreground(text)
 	f.FocusedButton.Foreground(base).Background(pink)
 	f.BlurredButton.Foreground(text).Background(base)
+	f.DisabledButton.Foreground(text).Background(subtext0)
 
 	f.TextInput.Cursor.Foreground(cursor)
 	f.TextInput.Placeholder.Foreground(overlay0)

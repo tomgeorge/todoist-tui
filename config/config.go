@@ -26,7 +26,7 @@ func SetDefaults() error {
 
 	defaultLogPath := path.Join(filepath.Join(userCacheDir, "todoist-tui", "todoist-tui.log"))
 	defaultStateDir := path.Join(filepath.Join(userCacheDir, "todoist-tui"))
-	fmt.Println(defaultLogPath)
+	fmt.Printf("Log file location: %s", defaultLogPath)
 	viper.SetDefault("log", defaultLogPath)
 	viper.SetDefault("stateDir", defaultStateDir)
 	return nil

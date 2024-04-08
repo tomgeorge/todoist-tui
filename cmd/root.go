@@ -94,7 +94,7 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 	client := sync.NewClient(nil).WithAuthToken(viper.GetString("api-token"))
 	ctx := ctx.New(&config, logger.Sugar(), client).WithTheme(theme.ThemeCatppuccin())
 	initialModel := model.New(ctx)
-	p := tea.NewProgram(initialModel)
+	p := tea.NewProgram(initialModel, tea.WithAltScreen())
 
 	if m, err := p.Run(); err != nil {
 		if ui, ok := m.(model.Model); ok {

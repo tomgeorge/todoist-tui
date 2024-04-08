@@ -3,6 +3,7 @@ package messages
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -97,6 +98,13 @@ type SaveStateMessage struct {
 func SaveState(ctx ctx.Context, state *sync.SyncResponse) tea.Cmd {
 	return func() tea.Msg {
 		buf, err := json.Marshal(state)
+		if err != nil {
+			ctx.Logger.Debug("Error marshalling json: %v", err)
+			return SaveStateMessage{
+				Success: false,
+				Error:   fmt.Errorf("marshalling sync response into json: %v", err),
+			}
+		}
 		ctx.Logger.Infof("in savestate, len(buf): %d", len(buf))
 		if err != nil {
 			return SaveStateMessage{

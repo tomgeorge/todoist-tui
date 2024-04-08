@@ -10,13 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
-	"github.com/tomgeorge/todoist-tui/model/project_view"
 	"github.com/tomgeorge/todoist-tui/services/sync"
-	"github.com/tomgeorge/todoist-tui/types"
-	"github.com/tomgeorge/todoist-tui/util"
 )
 
 type Model struct {
@@ -70,22 +66,26 @@ func (m *Model) performSync() tea.Cmd {
 		if err != nil && !os.IsNotExist(err) {
 			return messages.StateMessage{State: nil, Error: err}
 		}
-		m.ctx.Logger.Debugf("found a state file:\n---\n%s\n---\n", util.PrettyJSON(stateFile))
+		m.ctx.Logger.Debug("found a state file on the machine:\n---\n%s\n---\n")
+		// m.ctx.Logger.Debugf("found a state file on the machine:\n---\n%s\n---\n", util.PrettyJSON(stateFile))
 		if len(stateFile) != 0 {
 			state := &sync.SyncResponse{}
 			err := json.Unmarshal(stateFile, state)
 			if err != nil {
+				m.ctx.Logger.Debugf("Error unmarshalling: %v", err)
 				return messages.StateMessage{State: nil, Error: err}
 			}
 			m.ctx.Logger.Debug("Found a state file, doing weird mergey shit now")
 			recentUpdates, err := m.ctx.Client.FullSync(context.Background(), sync.WithSyncToken(state.SyncToken))
+			m.ctx.Logger.Debugf("Full sync results %v", recentUpdates)
 			if err != nil {
+				m.ctx.Logger.Debugf("Full sync error: %v", err)
 				return messages.StateMessage{State: state, Error: err}
 			}
-			m.ctx.Logger.Debug("Recent state", util.PrettyStruct(recentUpdates))
 			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Error: nil}
 		}
 		state, err := m.ctx.Client.FullSync(context.Background())
+		m.ctx.Logger.Debugf("No state file sync: %v", err)
 		return messages.StateMessage{State: state, Error: err}
 	}
 }
@@ -101,32 +101,30 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.performSync(), load())
 }
 
+type LoadingCompleteMessage struct{}
+
+func LoadingComplete() tea.Msg {
+	return LoadingCompleteMessage{}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m.ctx.Logger.Debug("loading model update")
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
 	switch msg := msg.(type) {
-	case spinner.TickMsg:
-		m.ctx.Logger.Debug("got a tick msg")
 	case messages.LoadingMessage:
 		m.ctx.Logger.Debug("LoadingMessage")
 		return m, m.spinner.Tick
 	case messages.StateMessage:
-		m.ctx.Logger.Debug("StateMessage")
+		m.ctx.Logger.Debugf("Loading Component - StateMessage %d", len(msg.State.Items))
 		if msg.Error != nil {
 			m.ctx.Logger.Debug("Got an error %s", msg.Error.Error())
 			m.errorMessage = fmt.Sprintf("Error getting data from todoist: %s", msg.Error.Error())
 			m.loading = false
 			return m, tea.Sequence(tea.Quit)
 		}
-		state := msg.State
-		tasks := lo.Filter(state.Items, func(i *types.Item, _ int) bool {
-			return i.ProjectId == state.Projects[0].Id
-		})
-		projects := project_view.New(m.ctx, msg.State.Projects[0], tasks, msg.State.Labels, msg.State.Projects)
 		return m, tea.Batch(
-			messages.SaveState(m.ctx, state),
-			messages.Push("project_view", projects),
+			LoadingComplete,
+			messages.SaveState(m.ctx, msg.State),
 		)
 	}
 	return m, cmd
@@ -134,7 +132,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.loading {
-		return lipgloss.NewStyle().PaddingLeft(1).Render(fmt.Sprintf("%s fetching data from todoist...",
+		return lipgloss.NewStyle().PaddingLeft(1).Render(fmt.Sprintf("%s fetching data from todoist",
 			m.spinner.View()))
 	} else {
 		return lipgloss.JoinVertical(lipgloss.Left, m.errorStyle.Render(m.errorMessage, "\n"))

@@ -8,10 +8,14 @@ import (
 )
 
 type Context struct {
-	Logger *zap.SugaredLogger
-	Client *sync.Client
-	Config *config.Config
-	Theme  *theme.Theme
+	Logger            *zap.SugaredLogger
+	Client            *sync.Client
+	Config            *config.Config
+	Theme             *theme.Theme
+	ScreenWidth       int
+	ScreenHeight      int
+	MainContentWidth  int
+	MainContentHeight int
 }
 
 func New(config *config.Config, logger *zap.SugaredLogger, client *sync.Client) Context {

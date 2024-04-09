@@ -15,6 +15,12 @@ import (
 	"github.com/tomgeorge/todoist-tui/services/sync"
 )
 
+func (m Model) Resize(_, _ int) tea.Model { return m }
+
+func (m Model) Model() tea.Model { return m }
+
+func (m Model) ComponentName() string { return "loading" }
+
 type Model struct {
 	ctx          ctx.Context
 	loading      bool
@@ -25,7 +31,7 @@ type Model struct {
 
 type ModelOption func(m *Model)
 
-func New(ctx ctx.Context, opts ...ModelOption) *Model {
+func New(ctx ctx.Context, opts ...ModelOption) Model {
 	var (
 		defaultLoading = true
 		defaultSpinner = spinner.New(
@@ -45,7 +51,7 @@ func New(ctx ctx.Context, opts ...ModelOption) *Model {
 	for _, opt := range opts {
 		opt(m)
 	}
-	return m
+	return *m
 }
 
 func WithSpinnerModel(spinnerModel spinner.Model) ModelOption {
@@ -77,7 +83,6 @@ func (m *Model) performSync() tea.Cmd {
 			}
 			m.ctx.Logger.Debug("Found a state file, doing weird mergey shit now")
 			recentUpdates, err := m.ctx.Client.FullSync(context.Background(), sync.WithSyncToken(state.SyncToken))
-			m.ctx.Logger.Debugf("Full sync results %v", recentUpdates)
 			if err != nil {
 				m.ctx.Logger.Debugf("Full sync error: %v", err)
 				return messages.StateMessage{State: state, Error: err}
@@ -115,7 +120,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctx.Logger.Debug("LoadingMessage")
 		return m, m.spinner.Tick
 	case messages.StateMessage:
-		m.ctx.Logger.Debugf("Loading Component - StateMessage %d", len(msg.State.Items))
 		if msg.Error != nil {
 			m.ctx.Logger.Debug("Got an error %s", msg.Error.Error())
 			m.errorMessage = fmt.Sprintf("Error getting data from todoist: %s", msg.Error.Error())
@@ -132,7 +136,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.loading {
-		return lipgloss.NewStyle().PaddingLeft(1).Render(fmt.Sprintf("%s fetching data from todoist",
+		return lipgloss.NewStyle().PaddingLeft(1).Render(fmt.Sprintf("\n%s fetching data from todoist\n",
 			m.spinner.View()))
 	} else {
 		return lipgloss.JoinVertical(lipgloss.Left, m.errorStyle.Render(m.errorMessage, "\n"))

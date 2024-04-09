@@ -17,9 +17,9 @@ func PrettyJSON(buf []byte) string {
 }
 
 // Pretty print a JSON representation of a struct
-func PrettyStruct(v any) string {
-	buf, _ := json.MarshalIndent(v, "", " ")
-	return string(buf)
+func PrettyMarshal(v any) ([]byte, error) {
+	buf, err := json.MarshalIndent(v, "", " ")
+	return buf, err
 }
 
 func AsPickable[E drawer.Pickable](items []E) []drawer.Pickable {

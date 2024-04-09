@@ -58,7 +58,7 @@ func initializeCobra(cmd *cobra.Command) {
 		viper.AutomaticEnv()
 
 		if err := viper.ReadInConfig(); err == nil {
-			fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+			fmt.Fprintf(os.Stderr, "Using config file: %s\n", viper.ConfigFileUsed())
 		}
 		config.SetDefaults()
 	}
@@ -94,13 +94,21 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 	client := sync.NewClient(nil).WithAuthToken(viper.GetString("api-token"))
 	ctx := ctx.New(&config, logger.Sugar(), client).WithTheme(theme.ThemeCatppuccin())
 	initialModel := model.New(ctx)
-	p := tea.NewProgram(initialModel, tea.WithAltScreen())
+	p := tea.NewProgram(initialModel)
 
-	if m, err := p.Run(); err != nil {
+	m, err := p.Run()
+	if err != nil {
 		if ui, ok := m.(model.Model); ok {
 			fmt.Println(ui.Events().View())
 		}
 		return err
 	}
+	// FIXME: This is an experiment with printing panic-able errors. I'd like to
+	// eventually make a "panic" list of errors on the model and print those out
+	// in something that would force the application to panic
+	// if ui, ok := m.(model.Model); ok {
+	// 	fmt.Println()
+	// 	fmt.Println(ui.Events().View())
+	// }
 	return nil
 }

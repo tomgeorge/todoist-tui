@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/samber/lo"
@@ -23,6 +25,30 @@ import (
 	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/types"
 )
+
+const (
+	FooterHeight = 1
+	EventsHeight = 1
+	// FIXME: I just pulled this out of my ass
+	ExtendedHelpHeight = 10
+)
+
+type Component interface {
+	ComponentName() string
+	Model() tea.Model
+	Resize(width, height int) tea.Model
+}
+
+type Stack interface {
+	Push(StackItemV2)
+	Pop() StackItemV2
+	Top() StackItemV2
+}
+
+type StackItemV2 interface {
+	Component
+	tea.Model
+}
 
 type StackItem struct {
 	Model tea.Model
@@ -40,21 +66,21 @@ type Model struct {
 	projects     []*types.Project
 	tasks        []*types.Item
 	labels       []*types.Label
-	stack        []StackItem
+	stack        []StackItemV2
 	projectView  project_view.Model
 	drawer       drawer.Model
 	spinner      spinner.Model
 	taskCreate   task_create.Model
-	width        int
-	height       int
 	showSpinner  bool
 	loading      bool
+	vp           viewport.Model
+	help         help.Model
 }
 
 func New(ctx ctx.Context) *Model {
 	const (
 		defaultLoading     = true
-		defaultWidth       = 50
+		defaultWidth       = 10
 		defaultHeight      = 50
 		defaultShowSpinner = false
 	)
@@ -74,14 +100,29 @@ func New(ctx ctx.Context) *Model {
 		labels:       nil,
 		projectView:  project_view.Model{},
 		taskCreate:   task_create.Model{},
-		width:        defaultWidth,
-		height:       defaultHeight,
 		footer:       footer.New(ctx),
+		vp:           viewport.New(defaultWidth, defaultHeight),
+		help:         help.New(),
 	}
 }
 
 type SaveAndQuitMsg struct {
 	Error error
+}
+
+func (m *Model) doViewportStuff() {
+	top := m.Top()
+	topView := top.View()
+	if top.ComponentName() == "loading" {
+		// m.ctx.Logger.Debugf("Loading component on top, vp height %d, width %d", m.vp.Height, m.vp.Width)
+	}
+	// m.ctx.Logger.Debugf("Top is %s, it's view function returned [%s]", top.ComponentName(), top.View())
+	m.vp.SetContent(topView)
+}
+
+func (m *Model) setViewportDimensions(width, height int) {
+	m.vp.Width = width
+	m.vp.Height = height
 }
 
 func (m *Model) save() tea.Cmd {
@@ -117,9 +158,15 @@ func (m Model) Init() tea.Cmd {
 	return messages.Push("loading", loading.New(m.ctx))
 }
 
-func push(m Model, msg messages.PushMessage) (Model, tea.Cmd) {
-	m.stack = append(m.stack, StackItem{Id: msg.Id, Model: msg.Model})
-	return m, m.stack[len(m.stack)-1].Model.Init()
+func onPush(m Model, msg messages.PushMessage) (Model, tea.Cmd) {
+	newStackItem, ok := msg.Model.(StackItemV2)
+	if !ok {
+		m.ctx.Logger.Debugf("Failed to push on the stack: %T", msg.Model)
+		return m, m.events.Publish("Failed to cast to StackItemV2", m.errorStyle, false, 0)
+	}
+	m.ctx.Logger.Debugf("Pushed a stack item successfully. Name %s, type %T", newStackItem.ComponentName(), msg.Model)
+	m.stack = append(m.stack, newStackItem)
+	return m, m.stack[len(m.stack)-1].Init()
 }
 
 func pop(m Model, _ messages.PopMessage) (Model, tea.Cmd) {
@@ -139,22 +186,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.drawer = drawer.New(pickables)
 		return m, nil
 	case messages.PushMessage:
-		m.ctx.Logger.Debug("PushMessage")
-		return push(m, msg)
+		m.ctx.Logger.Debugf("Got PushMessage for %s", msg.Id)
+		return onPush(m, msg)
+	case messages.LoadingMessage:
+		m.loading = true
+	case loading.LoadingCompleteMessage:
+		m.loading = false
+		if len(m.state.Projects) == 0 {
+			// FIXME: See the comment in root cmd. I need to watch for like a Panic
+			// message or something for these.
+			// I should also validate that the state object looks roughly as I would
+			// expect it to (e.g. nonzero number of projects)
+			return m, tea.Sequence(
+				m.events.Publish("No projects found", m.errorStyle, false, 10),
+				tea.Quit,
+			)
+		}
+		tasks := lo.Filter(m.state.Items, func(i *types.Item, _ int) bool {
+			return i.ProjectId == m.state.Projects[0].Id
+		})
+		projects := project_view.New(
+			m.ctx,
+			m.state.Projects[0],
+			tasks,
+			m.state.Labels,
+			m.state.Projects,
+			project_view.WithListHeight(m.ctx.MainContentHeight),
+			project_view.WithListWidth(m.ctx.MainContentWidth))
+		return m, tea.Batch(tea.EnterAltScreen, messages.Push("project_view", projects))
 	case messages.PopMessage:
 		return pop(m, msg)
 	case tea.WindowSizeMsg:
-		m.ctx.Logger.Debug("WindowSizeMsg")
-		m.width = msg.Width
-		m.height = msg.Height
+		if m.ctx.MainContentHeight == 0 && m.ctx.MainContentWidth == 0 {
+			m.ctx.Logger.Debugf("Initial WindowSizeMsg, Width: %d, Height %d", msg.Width, msg.Height)
+		}
+		m.ctx.ScreenWidth = msg.Width
+		m.ctx.ScreenHeight = msg.Height
+		m.ctx.MainContentWidth = msg.Width
+		m.ctx.MainContentHeight = msg.Height - FooterHeight
+		m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+		// m.ctx.Logger.Infof("Setting default screen size, Width %d Height %d", m.ctx.ScreenWidth, m.ctx.ScreenHeight)
+		// m.ctx.Logger.Debugf("Content Height %d, Content width: %d", m.ctx.MainContentHeight, m.ctx.MainContentWidth)
 		return m, cmd
 	case messages.OperationPendingMessage:
 		m.showSpinner = true
 		cmds = append(cmds, m.spinner.Tick)
-	case messages.StateMessage:
-		if msg.Error == nil {
-			m.state = msg.State
+	case messages.SaveStateMessage:
+		// m.ctx.Logger.Debug("Main UI Component - SaveStateMessage")
+		if msg.Error != nil {
+			return m, m.events.Publish(msg.Error.Error(), m.errorStyle, false, 0)
 		}
+	case messages.StateMessage:
+		if msg.Error != nil {
+			return m, tea.Sequence(
+				m.events.Publish(msg.Error.Error(), m.errorStyle, false, 0),
+				tea.Quit,
+			)
+		}
+		m.state = msg.State
 	case messages.OperationResponse:
 		m.showSpinner = false
 		if msg.Error != nil {
@@ -171,8 +260,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case messages.StateUpdatedMessage:
 		for i, stackItem := range m.stack {
-			if stackItem.Id == "project_view" {
-				m.stack[i] = StackItem{Id: "project_view", Model: *project_view.NewFromState(m.ctx, m.state)}
+			if stackItem.ComponentName() == "project_view" {
+				newStackItem := StackItemV2(project_view.NewFromState(m.ctx, m.state))
+				m.stack[i] = newStackItem
 			}
 		}
 
@@ -226,12 +316,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Sequence(messages.Pop(), messages.Push("project_view", projects))
 
 	case tea.KeyMsg:
-		m.ctx.Logger.Debug("KeyMsg")
 		switch msg.String() {
 		case "ctrl+p":
 			return m, messages.OpenDrawer
 		case "ctrl+c":
 			return m, m.save()
+		case "?":
+			m.footer.SetShowExtendedHelp(!m.footer.ShowExtendedHelp())
+			m.ctx.MainContentHeight = m.ctx.ScreenHeight - FooterHeight - EventsHeight
+			if m.footer.ShowExtendedHelp() {
+				m.ctx.MainContentHeight = m.ctx.ScreenHeight - ExtendedHelpHeight - EventsHeight
+			}
+			top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+			stackItem, ok := top.(StackItemV2)
+			if !ok {
+				m.ctx.Logger.Error("failed to coerce stack item to StackItemV2")
+			}
+			m.stack[len(m.stack)-1] = stackItem
+			m.doViewportStuff()
 		}
 	case SaveAndQuitMsg:
 		m.ctx.Logger.Debug("caught a save and quit message")
@@ -239,25 +341,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			failed := m.events.Publish(msg.Error.Error(), m.errorStyle, false, 0)
 			return m, tea.Sequence(failed, tea.Quit)
 		}
-		return m, tea.Sequence(tea.Quit)
+		return m, tea.Sequence(tea.ExitAltScreen, tea.Quit)
 	}
-	m.ctx.Logger.Infof("Updating %s", m.stack[len(m.stack)-1].Id)
-	lastModel := len(m.stack) - 1
-	m.stack[lastModel].Model, cmd = m.stack[lastModel].Model.Update(msg)
+
+	// Update top model
+	model := m.Top().Model()
+	updated, cmd := model.Update(msg)
 	cmds = append(cmds, cmd)
+
+	stackItem, ok := updated.(StackItemV2)
+	if !ok {
+		m.ctx.Logger.Errorf("Failed to push on the stack %T", updated)
+		return m, m.events.Publish("Failed to cast to StackItemV2", m.errorStyle, false, 0)
+	}
+	topIndex := len(m.stack) - 1
+	m.stack[topIndex] = stackItem
 	m.events, cmd = m.events.Update(msg)
 	cmds = append(cmds, cmd)
 	m.spinner, cmd = m.spinner.Update(msg)
 	cmds = append(cmds, cmd)
+	m.footer, cmd = m.footer.Update(msg)
+	cmds = append(cmds, cmd)
+	m.vp, cmd = m.vp.Update(msg)
+	m.vp.SetContent(m.Top().View())
+	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
+}
+
+func (m Model) Top() StackItemV2 {
+	return m.stack[len(m.stack)-1]
 }
 
 func (m Model) View() string {
 	if len(m.stack) == 0 {
-		return ""
+		return "Nothing on the stack"
 	}
 	var sections []string
-	sections = append(sections, m.stack[len(m.stack)-1].Model.View())
+	m.ctx.Logger.Debugf("Main UI View - Content Dimensions %dx%d", m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+	mainContent := lipgloss.NewStyle().Render(
+		m.vp.View(),
+	)
+
+	if m.loading && m.Top().ComponentName() == "loading" {
+		mainContent = m.Top().View()
+	}
+	// m.ctx.Logger.Debug(mainContent)
+	sections = append(sections, mainContent)
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}
@@ -265,10 +394,11 @@ func (m Model) View() string {
 		sections = append(sections, m.drawer.View())
 	}
 	sections = append(sections, m.events.View())
-	if !m.showSpinner {
+	if !m.loading {
 		sections = append(sections, m.footer.View())
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return content
 }
 
 func (m Model) Events() events.Model {

@@ -17,6 +17,25 @@ import (
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
+const (
+	HeaderHeight = 6
+)
+
+func (m Model) Resize(width, height int) tea.Model {
+	m.ctx.Logger.Debugf("Project View Component - Resize Requested: Width %d Height %d", width, height)
+	m.list.SetHeight(height - HeaderHeight)
+	m.ctx.Logger.Debugf("Project View Component - Setting height to %d", height-HeaderHeight)
+	return m
+}
+
+func (m Model) ComponentName() string {
+	return "project_view"
+}
+
+func (m Model) Model() tea.Model {
+	return m
+}
+
 type keyMap struct {
 	ScrollUp        key.Binding
 	ScrollDown      key.Binding
@@ -103,6 +122,7 @@ func NewList(ctx ctx.Context, items []list.Item, title string, width int, height
 	list.Title = title
 	list.Styles.Title = ctx.Theme.Focused.Title
 	list.SetShowHelp(false)
+	list.SetShowTitle(false)
 	return list
 }
 
@@ -122,7 +142,7 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		items = append(items, task)
 	}
 	delegate := NewListDelegate(ctx)
-	list := NewList(ctx, items, project.Name, 50, 50, delegate)
+	list := NewList(ctx, items, project.Name, ctx.MainContentWidth, ctx.MainContentHeight, delegate)
 	m := &Model{
 		ctx:         ctx,
 		help:        help.New(),
@@ -141,6 +161,18 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		),
 	}
 	return m
+}
+
+func WithListHeight(height int) ModelOption {
+	return func(m *Model) {
+		m.list.SetHeight(height)
+	}
+}
+
+func WithListWidth(width int) ModelOption {
+	return func(m *Model) {
+		m.list.SetHeight(width)
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -187,6 +219,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PreviousProject):
 			return m, changeProject(m.project, messages.PreviousProject)
 		}
+	case tea.WindowSizeMsg:
+		m.Resize(msg.Width, msg.Height)
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
@@ -204,6 +238,12 @@ func changeProject(project *types.Project, direction messages.ChangeProjectDirec
 
 func (m Model) View() string {
 	sections := []string{}
+	sections = append(sections, lipgloss.NewStyle().
+		MarginBottom(1).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Background(lipgloss.Color("#8caaee")).Foreground(lipgloss.Color("#303446")).
+		Render(m.project.Name))
 	if m.create.Focused() {
 		sections = append(sections, m.ctx.Theme.Focused.Base.Render(m.create.View()))
 	} else {

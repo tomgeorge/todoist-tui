@@ -118,7 +118,7 @@ func NewListDelegate(ctx ctx.Context) list.DefaultDelegate {
 }
 
 func NewList(ctx ctx.Context, items []list.Item, title string, width int, height int, delegate list.DefaultDelegate) list.Model {
-	list := list.New(items, delegate, width, height)
+	list := list.New(items, delegate, width, height-HeaderHeight)
 	list.Title = title
 	list.Styles.Title = ctx.Theme.Focused.Title
 	list.SetShowHelp(false)

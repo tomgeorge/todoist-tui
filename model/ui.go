@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	FooterHeight = 1
-	EventsHeight = 1
+	FooterHeight  = 1
+	EventsHeight  = 1
+	SpinnerHeight = 1
 	// FIXME: I just pulled this out of my ass
 	ExtendedHelpHeight = 10
 )
@@ -75,6 +76,15 @@ type Model struct {
 	loading      bool
 	vp           viewport.Model
 	help         help.Model
+}
+
+// Calculates the viewport height minus the other UI components
+func (m Model) ContentHeight(screenHeight int) int {
+	height := screenHeight - FooterHeight - EventsHeight - SpinnerHeight
+	if m.footer.ShowExtendedHelp() {
+		height = screenHeight - ExtendedHelpHeight - EventsHeight - SpinnerHeight
+	}
+	return height
 }
 
 func New(ctx ctx.Context) *Model {
@@ -223,7 +233,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctx.ScreenWidth = msg.Width
 		m.ctx.ScreenHeight = msg.Height
 		m.ctx.MainContentWidth = msg.Width
-		m.ctx.MainContentHeight = msg.Height - FooterHeight
+		m.ctx.MainContentHeight = m.ContentHeight(msg.Height)
 		m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
 		// m.ctx.Logger.Infof("Setting default screen size, Width %d Height %d", m.ctx.ScreenWidth, m.ctx.ScreenHeight)
 		// m.ctx.Logger.Debugf("Content Height %d, Content width: %d", m.ctx.MainContentHeight, m.ctx.MainContentWidth)
@@ -323,17 +333,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.save()
 		case "?":
 			m.footer.SetShowExtendedHelp(!m.footer.ShowExtendedHelp())
-			m.ctx.MainContentHeight = m.ctx.ScreenHeight - FooterHeight - EventsHeight
-			if m.footer.ShowExtendedHelp() {
-				m.ctx.MainContentHeight = m.ctx.ScreenHeight - ExtendedHelpHeight - EventsHeight
-			}
+			m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
 			top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+			m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
 			stackItem, ok := top.(StackItemV2)
 			if !ok {
 				m.ctx.Logger.Error("failed to coerce stack item to StackItemV2")
 			}
 			m.stack[len(m.stack)-1] = stackItem
-			m.doViewportStuff()
+			// m.doViewportStuff()
 		}
 	case SaveAndQuitMsg:
 		m.ctx.Logger.Debug("caught a save and quit message")

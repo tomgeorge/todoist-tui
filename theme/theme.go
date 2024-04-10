@@ -127,7 +127,8 @@ func ThemeBase() *Theme {
 
 	button := lipgloss.NewStyle().
 		Padding(buttonPaddingVertical, buttonPaddingHorizontal).
-		MarginRight(1)
+		MarginRight(2).
+		MarginLeft(2)
 
 	// Focused styles.
 	f := &t.Focused
@@ -150,9 +151,13 @@ func ThemeBase() *Theme {
 	f.UnselectedPrefix = lipgloss.NewStyle().
 		SetString("[ ] ")
 	f.FocusedButton = button.Copy().
+		PaddingLeft(2).
+		PaddingRight(2).
 		Foreground(lipgloss.Color("0")).
 		Background(lipgloss.Color("7"))
 	f.BlurredButton = button.Copy().
+		PaddingLeft(2).
+		PaddingRight(2).
 		Foreground(lipgloss.Color("7")).
 		Background(lipgloss.Color("0"))
 	f.DisabledButton = button.Copy().
@@ -164,7 +169,7 @@ func ThemeBase() *Theme {
 
 	// Blurred styles.
 	t.Blurred = f.copy()
-	t.Blurred.Base = t.Blurred.Base.BorderStyle(lipgloss.HiddenBorder())
+	t.Blurred.Base = t.Blurred.Base.Copy().BorderStyle(lipgloss.HiddenBorder())
 	t.Blurred.MultiSelectSelector = lipgloss.NewStyle().SetString("  ")
 
 	return &t
@@ -191,7 +196,7 @@ func ThemeCatppuccin() *Theme {
 
 	f := &t.Focused
 	f.Base.BorderForeground(subtext1)
-	f.Title.Foreground(mauve)
+	f.Title.Foreground(mauve).BorderForeground(subtext1)
 	f.NoteTitle.Foreground(mauve)
 	f.Description.Foreground(subtext0)
 	f.ErrorIndicator.Foreground(red)

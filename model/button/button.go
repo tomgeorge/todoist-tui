@@ -162,10 +162,10 @@ func (m *Model) SetEnabled(enabled bool) {
 func (m Model) View() string {
 	switch {
 	case !m.enabled:
-		return lipgloss.NewStyle().PaddingLeft(2).Render(m.disabledStyle.Render(m.text))
+		return m.disabledStyle.Render(m.text)
 	case m.focused:
-		return lipgloss.NewStyle().PaddingLeft(2).Render(m.focusedStyle.Render(m.text))
+		return m.focusedStyle.Render(m.text)
 	default:
-		return lipgloss.NewStyle().PaddingLeft(2).Render(m.blurredStyle.Render(m.text))
+		return m.blurredStyle.Render(m.text)
 	}
 }

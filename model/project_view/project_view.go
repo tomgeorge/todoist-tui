@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	HeaderHeight = 6
+	HeaderHeight = 3
 )
 
 func (m Model) Resize(width, height int) tea.Model {
@@ -52,7 +52,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 }
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.ScrollUp, k.ScrollUp, k.Confirm, k.Choose},
+		{k.ScrollUp, k.ScrollDown, k.Confirm, k.Choose},
 		{k.Help, k.Quit},
 	}
 }
@@ -83,8 +83,8 @@ var defaultKeys = keyMap{
 		key.WithHelp("enter", "confirm"),
 	),
 	Choose: key.NewBinding(
-		key.WithKeys("P"),
-		key.WithHelp("P", "Quick choose project"),
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "Quick choose project"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
@@ -111,9 +111,9 @@ type ModelOption func(m *Model)
 func NewListDelegate(ctx ctx.Context) list.DefaultDelegate {
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
-	delegate.Styles.SelectedDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
+	delegate.Styles.SelectedDesc = ctx.Theme.Focused.Base
 	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Help.ShortDesc.Copy().PaddingLeft(1)
+	delegate.Styles.NormalDesc = ctx.Theme.Blurred.Base
 	return delegate
 }
 
@@ -156,8 +156,8 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		create: button.New(
 			button.WithText("Create Task"),
 			button.WithEnabled(true),
-			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton),
-			button.WithBlurredStyle(ctx.Theme.Blurred.BlurredButton),
+			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton.MarginTop(1)),
+			button.WithBlurredStyle(ctx.Theme.Focused.BlurredButton.MarginTop(1)),
 		),
 	}
 	return m
@@ -183,6 +183,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, m.keys.ScrollUp):
+			if m.list.Index() == -1 {
+				return m, nil
+			}
+			m.list.Select(-1)
+			m.create.SetFocus(true)
+		case key.Matches(msg, m.keys.ScrollDown):
+			if m.list.Index() == -1 {
+				m.create.SetFocus(false)
+				m.list.Select(0)
+			}
 		case msg.String() == "n":
 			m.list.Select(-1)
 			m.create.SetFocus(true)
@@ -238,17 +249,7 @@ func changeProject(project *types.Project, direction messages.ChangeProjectDirec
 
 func (m Model) View() string {
 	sections := []string{}
-	sections = append(sections, lipgloss.NewStyle().
-		MarginBottom(1).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(lipgloss.Color("#8caaee")).Foreground(lipgloss.Color("#303446")).
-		Render(m.project.Name))
-	if m.create.Focused() {
-		sections = append(sections, m.ctx.Theme.Focused.Base.Render(m.create.View()))
-	} else {
-		sections = append(sections, m.ctx.Theme.Blurred.Base.Render(m.create.View()))
-	}
+	sections = append(sections, m.create.View())
 	sections = append(sections, m.list.View())
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

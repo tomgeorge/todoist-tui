@@ -1,7 +1,9 @@
 package project_view
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -12,6 +14,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
 	"github.com/tomgeorge/todoist-tui/model/button"
+	"github.com/tomgeorge/todoist-tui/model/stack_item"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
 	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/types"
@@ -260,4 +263,15 @@ func (m *Model) SetFocused(focused bool) {
 
 func (m Model) Project() *types.Project {
 	return m.project
+}
+
+func (m Model) FooterInformation() stack_item.FooterSections {
+	return stack_item.FooterSections{
+		Location:   fmt.Sprintf("%s: %s", strings.ToUpper(m.ComponentName()), m.project.Name),
+		Pagination: fmt.Sprintf("Page: [%d/%d]", m.list.Paginator.Page+1, m.list.Paginator.TotalPages),
+	}
+}
+
+func (m Model) KeyMap() help.KeyMap {
+	return m.keys
 }

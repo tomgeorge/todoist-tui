@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -19,6 +20,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/button"
 	"github.com/tomgeorge/todoist-tui/model/date_picker"
 	"github.com/tomgeorge/todoist-tui/model/picker"
+	"github.com/tomgeorge/todoist-tui/model/stack_item"
 	"github.com/tomgeorge/todoist-tui/model/task_description"
 	"github.com/tomgeorge/todoist-tui/model/task_title"
 	"github.com/tomgeorge/todoist-tui/services/sync"
@@ -34,6 +36,18 @@ type keyMap struct {
 	Quit        key.Binding
 	Back        key.Binding
 	Debug       key.Binding
+}
+
+func (m Model) Resize(_, _ int) tea.Model {
+	return m
+}
+
+func (m Model) Model() tea.Model {
+	return m
+}
+
+func (m Model) ComponentName() string {
+	return "task_create"
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -73,8 +87,8 @@ var defaultKeys = keyMap{
 		key.WithHelp("ctrl+c", "quit"),
 	),
 	Back: key.NewBinding(
-		key.WithKeys("backspace"),
-		key.WithHelp("backspace", "back/cancel"),
+		key.WithKeys("backspace", "ctrl+o"),
+		key.WithHelp("backspace/ctrl+o", "back/cancel"),
 	),
 	Debug: key.NewBinding(
 		key.WithKeys("f5"),
@@ -798,9 +812,6 @@ func (m *Model) DebugInfo() string {
 }
 
 func (m *Model) diff() (*sync.UpdateItemArgs, error) {
-	if m.debug {
-
-	}
 	args := &sync.UpdateItemArgs{}
 	args.Id = m.task.Id
 	if m.task.Content != m.title.GetContent() {
@@ -900,4 +911,17 @@ func (m *Model) SetFocused(focused bool) {
 
 func (m Model) Focused() bool {
 	return m.focused
+}
+
+// FIXME: add dirty/editing implementation
+func (m Model) FooterInformation() stack_item.FooterSections {
+	dirty := ""
+	return stack_item.FooterSections{
+		Location: fmt.Sprint(strings.ToUpper(m.ComponentName())),
+		Dirty:    dirty,
+	}
+}
+
+func (m Model) KeyMap() help.KeyMap {
+	return m.title.HelpKeys()
 }

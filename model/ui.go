@@ -21,6 +21,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/footer"
 	"github.com/tomgeorge/todoist-tui/model/loading"
 	"github.com/tomgeorge/todoist-tui/model/project_view"
+	"github.com/tomgeorge/todoist-tui/model/stack_item"
 	"github.com/tomgeorge/todoist-tui/model/task_create"
 	"github.com/tomgeorge/todoist-tui/services/sync"
 	"github.com/tomgeorge/todoist-tui/types"
@@ -34,28 +35,6 @@ const (
 	ExtendedHelpHeight = 10
 )
 
-type Component interface {
-	ComponentName() string
-	Model() tea.Model
-	Resize(width, height int) tea.Model
-}
-
-type Stack interface {
-	Push(StackItemV2)
-	Pop() StackItemV2
-	Top() StackItemV2
-}
-
-type StackItemV2 interface {
-	Component
-	tea.Model
-}
-
-type StackItem struct {
-	Model tea.Model
-	Id    string
-}
-
 type Model struct {
 	events       events.Model
 	ctx          ctx.Context
@@ -67,7 +46,7 @@ type Model struct {
 	projects     []*types.Project
 	tasks        []*types.Item
 	labels       []*types.Label
-	stack        []StackItemV2
+	stack        []stack_item.StackItem
 	projectView  project_view.Model
 	drawer       drawer.Model
 	spinner      spinner.Model
@@ -169,10 +148,10 @@ func (m Model) Init() tea.Cmd {
 }
 
 func onPush(m Model, msg messages.PushMessage) (Model, tea.Cmd) {
-	newStackItem, ok := msg.Model.(StackItemV2)
+	newStackItem, ok := msg.Model.(stack_item.StackItem)
 	if !ok {
 		m.ctx.Logger.Debugf("Failed to push on the stack: %T", msg.Model)
-		return m, m.events.Publish("Failed to cast to StackItemV2", m.errorStyle, false, 0)
+		return m, m.events.Publish("Failed to cast to StackItem", m.errorStyle, false, 0)
 	}
 	m.ctx.Logger.Debugf("Pushed a stack item successfully. Name %s, type %T", newStackItem.ComponentName(), msg.Model)
 	m.stack = append(m.stack, newStackItem)
@@ -181,7 +160,9 @@ func onPush(m Model, msg messages.PushMessage) (Model, tea.Cmd) {
 
 func pop(m Model, _ messages.PopMessage) (Model, tea.Cmd) {
 	m.stack = m.stack[:len(m.stack)-1]
-	return m, nil
+	return m, func() tea.Msg {
+		return true
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -235,8 +216,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctx.MainContentWidth = msg.Width
 		m.ctx.MainContentHeight = m.ContentHeight(msg.Height)
 		m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-		// m.ctx.Logger.Infof("Setting default screen size, Width %d Height %d", m.ctx.ScreenWidth, m.ctx.ScreenHeight)
-		// m.ctx.Logger.Debugf("Content Height %d, Content width: %d", m.ctx.MainContentHeight, m.ctx.MainContentWidth)
 		return m, cmd
 	case messages.OperationPendingMessage:
 		m.showSpinner = true
@@ -271,7 +250,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.StateUpdatedMessage:
 		for i, stackItem := range m.stack {
 			if stackItem.ComponentName() == "project_view" {
-				newStackItem := StackItemV2(project_view.NewFromState(m.ctx, m.state))
+				newStackItem := stack_item.StackItem(project_view.NewFromState(m.ctx, m.state))
 				m.stack[i] = newStackItem
 			}
 		}
@@ -331,14 +310,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, messages.OpenDrawer
 		case "ctrl+c":
 			return m, m.save()
-		case "?":
+		case "ctrl+_":
 			m.footer.SetShowExtendedHelp(!m.footer.ShowExtendedHelp())
 			m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
 			top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
 			m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-			stackItem, ok := top.(StackItemV2)
+			stackItem, ok := top.(stack_item.StackItem)
 			if !ok {
-				m.ctx.Logger.Error("failed to coerce stack item to StackItemV2")
+				m.ctx.Logger.Error("failed to coerce stack item to StackItem")
 			}
 			m.stack[len(m.stack)-1] = stackItem
 			// m.doViewportStuff()
@@ -357,10 +336,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := model.Update(msg)
 	cmds = append(cmds, cmd)
 
-	stackItem, ok := updated.(StackItemV2)
+	stackItem, ok := updated.(stack_item.StackItem)
 	if !ok {
 		m.ctx.Logger.Errorf("Failed to push on the stack %T", updated)
-		return m, m.events.Publish("Failed to cast to StackItemV2", m.errorStyle, false, 0)
+		return m, m.events.Publish("Failed to cast to StackItem", m.errorStyle, false, 0)
 	}
 	topIndex := len(m.stack) - 1
 	m.stack[topIndex] = stackItem
@@ -376,7 +355,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m Model) Top() StackItemV2 {
+func (m Model) Top() stack_item.StackItem {
 	return m.stack[len(m.stack)-1]
 }
 
@@ -403,7 +382,7 @@ func (m Model) View() string {
 	}
 	sections = append(sections, m.events.View())
 	if !m.loading {
-		sections = append(sections, m.footer.View())
+		sections = append(sections, m.footer.View(m.Top(), m.ctx.ScreenWidth))
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return content

@@ -7,11 +7,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
+	"github.com/tomgeorge/todoist-tui/model/stack_item"
 	"github.com/tomgeorge/todoist-tui/services/sync"
 )
 
@@ -141,4 +144,25 @@ func (m Model) View() string {
 	} else {
 		return lipgloss.JoinVertical(lipgloss.Left, m.errorStyle.Render(m.errorMessage, "\n"))
 	}
+}
+
+func (m Model) FooterInformation() stack_item.FooterSections {
+	return stack_item.FooterSections{
+		Location: fmt.Sprintf("%s:", m.ComponentName()),
+	}
+}
+
+type keyMap struct {
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{}
+}
+
+func (m Model) KeyMap() help.KeyMap {
+	return keyMap{}
 }

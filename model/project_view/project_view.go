@@ -126,6 +126,7 @@ func NewList(ctx ctx.Context, items []list.Item, title string, width int, height
 	list.Styles.Title = ctx.Theme.Focused.Title
 	list.SetShowHelp(false)
 	list.SetShowTitle(false)
+	list.SetShowPagination(false)
 	return list
 }
 
@@ -159,8 +160,8 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		create: button.New(
 			button.WithText("Create Task"),
 			button.WithEnabled(true),
-			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton.MarginTop(1)),
-			button.WithBlurredStyle(ctx.Theme.Focused.BlurredButton.MarginTop(1)),
+			button.WithFocusedStyle(ctx.Theme.Focused.FocusedButton.Copy().MarginTop(1)),
+			button.WithBlurredStyle(ctx.Theme.Focused.BlurredButton.Copy().MarginTop(1)),
 		),
 	}
 	return m

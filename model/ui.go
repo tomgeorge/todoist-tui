@@ -53,12 +53,16 @@ type Model struct {
 	taskCreate   task_create.Model
 	showSpinner  bool
 	loading      bool
+	drawerActive bool
 	vp           viewport.Model
 	help         help.Model
 }
 
 // Calculates the viewport height minus the other UI components
 func (m Model) ContentHeight(screenHeight int) int {
+	if m.drawerActive {
+		return screenHeight - lipgloss.Height(m.drawer.View()) - EventsHeight - SpinnerHeight
+	}
 	height := screenHeight - FooterHeight - EventsHeight - SpinnerHeight
 	if m.footer.ShowExtendedHelp() {
 		height = screenHeight - ExtendedHelpHeight - EventsHeight - SpinnerHeight
@@ -68,10 +72,11 @@ func (m Model) ContentHeight(screenHeight int) int {
 
 func New(ctx ctx.Context) *Model {
 	const (
-		defaultLoading     = true
-		defaultWidth       = 10
-		defaultHeight      = 50
-		defaultShowSpinner = false
+		defaultLoading      = true
+		defaultWidth        = 10
+		defaultHeight       = 50
+		defaultShowSpinner  = false
+		defaultDrawerActive = false
 	)
 	return &Model{
 		loading: defaultLoading,
@@ -92,6 +97,7 @@ func New(ctx ctx.Context) *Model {
 		footer:       footer.New(ctx),
 		vp:           viewport.New(defaultWidth, defaultHeight),
 		help:         help.New(),
+		drawerActive: defaultDrawerActive,
 	}
 }
 
@@ -165,17 +171,69 @@ func pop(m Model, _ messages.PopMessage) (Model, tea.Cmd) {
 	}
 }
 
+func (m *Model) SelectProject(project types.Project) tea.Cmd {
+	tasks := lo.Filter(m.state.Items, func(i *types.Item, _ int) bool {
+		return i.ProjectId == project.Id
+	})
+	isProjectInState := func(item *types.Project) bool {
+		return item.Id == project.Id
+	}
+	projectInState, _ := lo.Find(m.state.Projects, isProjectInState)
+	view := project_view.New(
+		m.ctx,
+		projectInState,
+		tasks,
+		m.state.Labels,
+		m.state.Projects,
+	)
+	return tea.Sequence(messages.Pop(), messages.Push("project_view", view))
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
+	// Only respond to drawer updates until it leaves focus
+	if m.drawerActive {
+		if closedMsg, ok := msg.(drawer.DrawerClosedMessage); ok {
+			m.drawerActive = false
+			m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
+			m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+			top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+			stackItem, ok := top.(stack_item.StackItem)
+			if !ok {
+				m.ctx.Logger.Error("failed to coerce stack item to StackItem")
+			}
+			m.stack[len(m.stack)-1] = stackItem
+			if closedMsg.Item != nil {
+				m.ctx.Logger.Debugf("Selected %s", closedMsg.Item.Info())
+				return m, drawer.DrawerChoice(closedMsg.Item.Thing())
+			}
+			return m, nil
+		}
+		m.drawer, cmd = m.drawer.Update(msg)
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case messages.OpenDrawerMessage:
+		m.drawerActive = true
 		pickables := make([]drawer.Pickable, len(m.state.Projects))
 		for i, project := range m.state.Projects {
 			pickables[i] = project
 		}
-		m.drawer = drawer.New(pickables)
+		m.drawer = drawer.New(m.ctx, pickables)
+		m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
+		top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+		m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+		stackItem, ok := top.(stack_item.StackItem)
+		if !ok {
+			m.ctx.Logger.Error("failed to coerce stack item to StackItem")
+		}
+		m.stack[len(m.stack)-1] = stackItem
 		return m, nil
+	case drawer.DrawerSelectionMessage:
+		if msg.Project.Id != "" {
+			return m, m.SelectProject(msg.Project)
+		}
 	case messages.PushMessage:
 		m.ctx.Logger.Debugf("Got PushMessage for %s", msg.Id)
 		return onPush(m, msg)
@@ -320,7 +378,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ctx.Logger.Error("failed to coerce stack item to StackItem")
 			}
 			m.stack[len(m.stack)-1] = stackItem
-			// m.doViewportStuff()
 		}
 	case SaveAndQuitMsg:
 		m.ctx.Logger.Debug("caught a save and quit message")
@@ -377,12 +434,12 @@ func (m Model) View() string {
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}
-	if m.drawer.Enabled() {
-		sections = append(sections, m.drawer.View())
-	}
 	sections = append(sections, m.events.View())
-	if !m.loading {
+	if !m.loading && !m.drawerActive {
 		sections = append(sections, m.footer.View(m.Top(), m.ctx.ScreenWidth))
+	}
+	if !m.loading && m.drawerActive {
+		sections = append(sections, m.drawer.View())
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return content

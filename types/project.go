@@ -82,3 +82,7 @@ func (p Project) GetFormData() interface{} {
 func (p Project) Info() string {
 	return p.Name
 }
+
+func (p Project) Thing() any {
+	return p
+}

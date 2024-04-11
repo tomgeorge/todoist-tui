@@ -158,6 +158,18 @@ func Select(item Pickable) tea.Cmd {
 	}
 }
 
+func style(m Model, itemIndex int, item Pickable) string {
+	content := item.Info()
+	if itemIndex == 0 && m.index == 0 {
+		return m.topItemStyle.Render(m.selectedItemStyle.Render(content))
+	} else if itemIndex == 0 {
+		return m.topItemStyle.Render(content)
+	} else if itemIndex == m.index {
+		return m.selectedItemStyle.Render(content)
+	}
+	return content
+}
+
 func (m Model) View() string {
 	sections := []string{}
 	max := func(a, b int) int {
@@ -172,17 +184,7 @@ func (m Model) View() string {
 		Background(lipgloss.Color("#232634")).
 		Render(strings.Repeat(" ", max(0, m.ctx.ScreenWidth-lipgloss.Width(statusLine)-lipgloss.Width(helpIndicator))))
 	for i, item := range m.items {
-		content := item.Info()
-		if i == 0 && m.index == 0 {
-			sections = append(sections, m.topItemStyle.Render(m.selectedItemStyle.Render(content)))
-		} else if i == 0 {
-			sections = append(sections, m.topItemStyle.Render(content))
-		} else if i == m.index {
-			sections = append(sections, m.selectedItemStyle.Render(content))
-		} else {
-			// I need a default item style
-			sections = append(sections, content)
-		}
+		sections = append(sections, style(m, i, item))
 	}
 	sections = append(sections, statusLine+spacing+helpIndicator)
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)

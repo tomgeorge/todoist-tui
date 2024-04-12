@@ -210,6 +210,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Sort of works
+		// FIXME: Experiment
+		if showHelp, ok := msg.(tea.KeyMsg); ok && showHelp.String() == "ctrl+_" {
+			m.drawerActive = false
+			return m, func() tea.Msg { return msg }
+		}
+		if quitting, ok := msg.(tea.KeyMsg); ok && quitting.String() == "ctrl+c" {
+			m.drawerActive = false
+			m.ctx.Logger.Debug("Caught ctrl+c in active drawer")
+			return m, m.save()
+		}
 		m.drawer, cmd = m.drawer.Update(msg)
 		return m, cmd
 	}

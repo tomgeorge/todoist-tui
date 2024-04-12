@@ -48,6 +48,7 @@ var defaultKeys = keyMap{
 
 type Pickable interface {
 	Info() string
+	// Returns the underlying struct
 	Thing() any
 }
 type Model struct {

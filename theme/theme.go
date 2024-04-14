@@ -215,6 +215,7 @@ func ThemeCatppuccin() *Theme {
 		red      = lipgloss.AdaptiveColor{Light: light.Red().Hex, Dark: dark.Red().Hex}
 		pink     = lipgloss.AdaptiveColor{Light: light.Pink().Hex, Dark: dark.Pink().Hex}
 		blue     = lipgloss.AdaptiveColor{Light: light.Blue().Hex, Dark: dark.Blue().Hex}
+		// sky      = lipgloss.AdaptiveColor{Light: light.Sky().Hex, Dark: dark.Sky().Hex}
 		// sapphire = lipgloss.AdaptiveColor{Light: light.Sapphire().Hex, Dark: dark.Sapphire().Hex}
 		mauve = lipgloss.AdaptiveColor{Light: light.Mauve().Hex, Dark: dark.Mauve().Hex}
 		// peach    = lipgloss.AdaptiveColor{Light: light.Peach().Hex, Dark: dark.Peach().Hex}
@@ -284,12 +285,12 @@ func ThemeCatppuccin() *Theme {
 			Background(surface0).
 			Foreground(text),
 		UnselectedItem: lipgloss.NewStyle().Foreground(text),
-		KindColor:      subtext0,
+		KindColor:      green,
 		TopBarColor:    surface2,
 		PromptStyles: FuzzyFinderPromptStyles{
 			PromptStyle:      lipgloss.NewStyle().Foreground(teal),
-			TextStyle:        lipgloss.Style{},
-			PlaceholderStyle: lipgloss.Style{},
+			TextStyle:        lipgloss.NewStyle().Foreground(text),
+			PlaceholderStyle: lipgloss.NewStyle().Foreground(surface2),
 		},
 	}
 

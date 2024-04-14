@@ -1,6 +1,10 @@
 package types
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 type ViewStyle string
 
@@ -85,4 +89,24 @@ func (p Project) Info() string {
 
 func (p Project) Thing() any {
 	return p
+}
+
+func (p Project) Display() string {
+	return p.Name
+}
+
+func (p Project) SearchResultString() string {
+	return fmt.Sprintf("%s", p.Name)
+}
+
+func (p Project) Implemented() bool {
+	return true
+}
+
+func (p Project) Kind() string {
+	return "Project"
+}
+
+func (p Project) IsMatch(matchContent string) bool {
+	return p.Name == matchContent
 }

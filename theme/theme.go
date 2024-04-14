@@ -15,6 +15,30 @@ type Theme struct {
 	Blurred        FieldStyles
 	Focused        FieldStyles
 	Help           help.Styles
+	FuzzyFinder    FuzzyFinderComponentStyles
+}
+
+type FuzzyFinderPromptStyles struct {
+	PromptStyle      lipgloss.Style
+	TextStyle        lipgloss.Style
+	PlaceholderStyle lipgloss.Style
+}
+
+type FuzzyFinderComponentStyles struct {
+	// The part of the status line that says "Fuzzy Search"
+	StatusLineCommand lipgloss.Style
+	// The Spacing Color
+	StatusLineSpacing lipgloss.Style
+	// The part of the status line that displays the index of the current selection
+	// and the total number of results
+	StatusLineSelectionIndicator lipgloss.Style
+	// The part of the status line that displays the help indicator
+	StatusLineHelp lipgloss.Style
+	SelectedItem   lipgloss.Style
+	UnselectedItem lipgloss.Style
+	KindColor      lipgloss.AdaptiveColor
+	TopBarColor    lipgloss.AdaptiveColor
+	PromptStyles   FuzzyFinderPromptStyles
 }
 
 // FieldStyles are the styles for input fields.
@@ -179,7 +203,7 @@ func ThemeCatppuccin() *Theme {
 	t := ThemeBase().copy()
 
 	light := catppuccin.Latte
-	dark := catppuccin.Mocha
+	dark := catppuccin.Frappe
 	var (
 		base     = lipgloss.AdaptiveColor{Light: light.Base().Hex, Dark: dark.Base().Hex}
 		text     = lipgloss.AdaptiveColor{Light: light.Text().Hex, Dark: dark.Text().Hex}
@@ -190,8 +214,17 @@ func ThemeCatppuccin() *Theme {
 		green    = lipgloss.AdaptiveColor{Light: light.Green().Hex, Dark: dark.Green().Hex}
 		red      = lipgloss.AdaptiveColor{Light: light.Red().Hex, Dark: dark.Red().Hex}
 		pink     = lipgloss.AdaptiveColor{Light: light.Pink().Hex, Dark: dark.Pink().Hex}
-		mauve    = lipgloss.AdaptiveColor{Light: light.Mauve().Hex, Dark: dark.Mauve().Hex}
+		blue     = lipgloss.AdaptiveColor{Light: light.Blue().Hex, Dark: dark.Blue().Hex}
+		// sapphire = lipgloss.AdaptiveColor{Light: light.Sapphire().Hex, Dark: dark.Sapphire().Hex}
+		mauve = lipgloss.AdaptiveColor{Light: light.Mauve().Hex, Dark: dark.Mauve().Hex}
+		// peach    = lipgloss.AdaptiveColor{Light: light.Peach().Hex, Dark: dark.Peach().Hex}
 		cursor   = lipgloss.AdaptiveColor{Light: light.Rosewater().Hex, Dark: dark.Rosewater().Hex}
+		crust    = lipgloss.AdaptiveColor{Light: light.Crust().Hex, Dark: dark.Crust().Hex}
+		surface0 = lipgloss.AdaptiveColor{Light: light.Surface0().Hex, Dark: dark.Surface0().Hex}
+		// surface1 = lipgloss.AdaptiveColor{Light: light.Surface1().Hex, Dark: dark.Surface1().Hex}
+		surface2 = lipgloss.AdaptiveColor{Light: light.Surface2().Hex, Dark: dark.Surface2().Hex}
+		mantle   = lipgloss.AdaptiveColor{Light: light.Mantle().Hex, Dark: dark.Mantle().Hex}
+		teal     = lipgloss.AdaptiveColor{Light: light.Teal().Hex, Dark: dark.Teal().Hex}
 	)
 
 	f := &t.Focused
@@ -226,6 +259,39 @@ func ThemeCatppuccin() *Theme {
 	t.Help.FullKey.Foreground(subtext0)
 	t.Help.FullDesc.Foreground(overlay1)
 	t.Help.FullSeparator.Foreground(subtext0)
+	t.FuzzyFinder = FuzzyFinderComponentStyles{
+		StatusLineCommand: lipgloss.NewStyle().
+			Background(red).
+			Foreground(crust).
+			PaddingLeft(1).
+			PaddingRight(1).
+			Bold(true),
+		StatusLineSpacing: lipgloss.NewStyle().
+			Background(mantle),
+		StatusLineSelectionIndicator: lipgloss.NewStyle().
+			Background(mauve).
+			Foreground(crust).
+			PaddingLeft(1).
+			PaddingRight(1).
+			Bold(true),
+		StatusLineHelp: lipgloss.NewStyle().
+			Background(blue).
+			Foreground(crust).
+			PaddingLeft(1).
+			PaddingRight(1).
+			Bold(true),
+		SelectedItem: lipgloss.NewStyle().
+			Background(surface0).
+			Foreground(text),
+		UnselectedItem: lipgloss.NewStyle().Foreground(text),
+		KindColor:      subtext0,
+		TopBarColor:    surface2,
+		PromptStyles: FuzzyFinderPromptStyles{
+			PromptStyle:      lipgloss.NewStyle().Foreground(teal),
+			TextStyle:        lipgloss.Style{},
+			PlaceholderStyle: lipgloss.Style{},
+		},
+	}
 
 	return &t
 }

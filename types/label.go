@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -32,4 +34,24 @@ func (l Label) Style() lipgloss.Style {
 		Foreground(lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#000000"}).
 		MarginRight(1)
 	// MarginTop(1)
+}
+
+func (l Label) Display() string {
+	return l.Name
+}
+
+func (l Label) SearchResultString() string {
+	return fmt.Sprintf("%s", l.Name)
+}
+
+func (l Label) Implemented() bool {
+	return false
+}
+
+func (l Label) Kind() string {
+	return "Label"
+}
+
+func (l Label) IsMatch(name string) bool {
+	return l.Name == name
 }

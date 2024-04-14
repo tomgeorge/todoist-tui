@@ -19,6 +19,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/drawer"
 	"github.com/tomgeorge/todoist-tui/model/events"
 	"github.com/tomgeorge/todoist-tui/model/footer"
+	"github.com/tomgeorge/todoist-tui/model/fuzzyfinder"
 	"github.com/tomgeorge/todoist-tui/model/loading"
 	"github.com/tomgeorge/todoist-tui/model/project_view"
 	"github.com/tomgeorge/todoist-tui/model/stack_item"
@@ -36,30 +37,35 @@ const (
 )
 
 type Model struct {
-	events       events.Model
-	ctx          ctx.Context
-	footer       footer.Model
-	project      *types.Project
-	state        *sync.SyncResponse
-	errorStyle   lipgloss.Style
-	successStyle lipgloss.Style
-	projects     []*types.Project
-	tasks        []*types.Item
-	labels       []*types.Label
-	stack        []stack_item.StackItem
-	projectView  project_view.Model
-	drawer       drawer.Model
-	spinner      spinner.Model
-	taskCreate   task_create.Model
-	showSpinner  bool
-	loading      bool
-	drawerActive bool
-	vp           viewport.Model
-	help         help.Model
+	events          events.Model
+	ctx             ctx.Context
+	footer          footer.Model
+	project         *types.Project
+	state           *sync.SyncResponse
+	errorStyle      lipgloss.Style
+	successStyle    lipgloss.Style
+	projects        []*types.Project
+	tasks           []*types.Item
+	labels          []*types.Label
+	stack           []stack_item.StackItem
+	projectView     project_view.Model
+	drawer          drawer.Model
+	fuzzyfinder     fuzzyfinder.Model
+	fuzzyfinderOpen bool
+	spinner         spinner.Model
+	taskCreate      task_create.Model
+	showSpinner     bool
+	loading         bool
+	drawerActive    bool
+	vp              viewport.Model
+	help            help.Model
 }
 
 // Calculates the viewport height minus the other UI components
 func (m Model) ContentHeight(screenHeight int) int {
+	if m.fuzzyfinderOpen {
+		return screenHeight - lipgloss.Height(m.fuzzyfinder.View()) - EventsHeight - SpinnerHeight
+	}
 	if m.drawerActive {
 		return screenHeight - lipgloss.Height(m.drawer.View()) - EventsHeight - SpinnerHeight
 	}
@@ -192,6 +198,15 @@ func (m *Model) SelectProject(project types.Project) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
+
+	if m.fuzzyfinderOpen {
+		if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "ctrl+f" {
+			m.fuzzyfinderOpen = false
+			m.onFuzzyFinderClose()
+		}
+		m.fuzzyfinder, cmd = m.fuzzyfinder.Update(msg)
+		return m, cmd
+	}
 	// Only respond to drawer updates until it leaves focus
 	if m.drawerActive {
 		if closedMsg, ok := msg.(drawer.DrawerClosedMessage); ok {
@@ -389,6 +404,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ctx.Logger.Error("failed to coerce stack item to StackItem")
 			}
 			m.stack[len(m.stack)-1] = stackItem
+		case "ctrl+f":
+			if !m.fuzzyfinderOpen {
+				m.fuzzyfinder = m.makeFuzzyFinder()
+				m.fuzzyfinderOpen = true
+				return m.onFuzzyFinderOpen()
+			}
+			m.fuzzyfinderOpen = false
+			m.onFuzzyFinderClose()
+			return m, nil
 		}
 	case SaveAndQuitMsg:
 		m.ctx.Logger.Debug("caught a save and quit message")
@@ -446,14 +470,52 @@ func (m Model) View() string {
 		sections = append(sections, m.spinner.View())
 	}
 	sections = append(sections, m.events.View())
-	if !m.loading && !m.drawerActive {
+	if !m.loading && !m.drawerActive && !m.fuzzyfinderOpen {
 		sections = append(sections, m.footer.View(m.Top(), m.ctx.ScreenWidth))
 	}
 	if !m.loading && m.drawerActive {
 		sections = append(sections, m.drawer.View())
 	}
+	if m.fuzzyfinderOpen {
+		sections = append(sections, m.fuzzyfinder.View())
+	}
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return content
+}
+
+func (m Model) makeFuzzyFinder() fuzzyfinder.Model {
+	sources := make(fuzzyfinder.Sources, 0)
+	for _, project := range m.state.Projects {
+		sources = append(sources, project)
+	}
+	for _, label := range m.state.Labels {
+		sources = append(sources, label)
+	}
+	return fuzzyfinder.New(m.ctx, sources, 10,
+		fuzzyfinder.WithStyles(m.ctx.Theme.FuzzyFinder))
+}
+
+func (m *Model) onFuzzyFinderOpen() (tea.Model, tea.Cmd) {
+	m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
+	top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+	m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+	stackItem, ok := top.(stack_item.StackItem)
+	if !ok {
+		m.ctx.Logger.Error("failed to coerce stack item to StackItem")
+	}
+	m.stack[len(m.stack)-1] = stackItem
+	return m, m.fuzzyfinder.Init()
+}
+
+func (m *Model) onFuzzyFinderClose() {
+	m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
+	m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+	top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
+	stackItem, ok := top.(stack_item.StackItem)
+	if !ok {
+		m.ctx.Logger.Error("failed to coerce stack item to StackItem")
+	}
+	m.stack[len(m.stack)-1] = stackItem
 }
 
 func (m Model) Events() events.Model {

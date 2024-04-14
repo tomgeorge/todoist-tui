@@ -149,7 +149,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// m.styles.SelectedItem.Width(msg.Width)
 		m.viewport.Width = m.ctx.ScreenWidth
 	case tea.KeyMsg:
 		switch {

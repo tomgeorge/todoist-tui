@@ -111,7 +111,7 @@ type Model struct {
 	submit        button.Model
 	cancel        button.Model
 	focused       bool
-	focusIndex    Section
+	focusIndex    viewSection
 	help          help.Model
 	keys          keyMap
 	task          *types.Item
@@ -122,10 +122,10 @@ type Model struct {
 	debug         bool
 }
 
-type Section int
+type viewSection int
 
 const (
-	titleSection Section = iota
+	titleSection viewSection = iota
 	projectSection
 	dueSection
 	descriptionSection
@@ -458,7 +458,7 @@ func handleSubmit(m Model, msg button.SubmitMsg) (Model, tea.Cmd) {
 	m.ctx.Logger.Info("Parent got the SubmitMsg from the child")
 	if m.focusIndex == submitSection {
 		if m.task != nil {
-			return m, tea.Batch(messages.OperationPending(), m.UpdateTask())
+			return m, tea.Batch(messages.OperationPending(), m.updateTask())
 		}
 		return m, tea.Batch(messages.OperationPending(), m.createTask())
 	}
@@ -704,9 +704,6 @@ func (m Model) View() string {
 	if m.debug {
 		sections = append(sections, m.DebugInfo())
 	}
-	var (
-	// titleSelected = m.focused == titleSection
-	)
 	sections = append(sections, m.renderContent(titleSelected, true, m.title.View()))
 	sections = append(sections, m.renderContent(projectsSelected, true, m.project.View()))
 	sections = append(sections, m.renderContent(dueDateSelected, true, m.dueDate.View()))
@@ -879,7 +876,7 @@ func equalIgnoreOrder[T comparable](s1 []T, s2 []T) bool {
 	return len(diff) == 0
 }
 
-func (m *Model) UpdateTask() tea.Cmd {
+func (m *Model) updateTask() tea.Cmd {
 	return func() tea.Msg {
 		commands, err := m.commands()
 		request := m.ctx.Client.NewSyncRequest([]string{"items"}, commands)

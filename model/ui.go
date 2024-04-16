@@ -16,7 +16,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/tomgeorge/todoist-tui/ctx"
 	"github.com/tomgeorge/todoist-tui/messages"
-	"github.com/tomgeorge/todoist-tui/model/drawer"
 	"github.com/tomgeorge/todoist-tui/model/events"
 	"github.com/tomgeorge/todoist-tui/model/footer"
 	"github.com/tomgeorge/todoist-tui/model/fuzzyfinder"
@@ -37,37 +36,32 @@ const (
 )
 
 type Model struct {
-	events          events.Model
-	ctx             ctx.Context
-	footer          footer.Model
 	project         *types.Project
 	state           *sync.SyncResponse
-	errorStyle      lipgloss.Style
+	help            help.Model
 	successStyle    lipgloss.Style
-	projects        []*types.Project
+	errorStyle      lipgloss.Style
+	vp              viewport.Model
+	stack           []stack_item.StackItem
 	tasks           []*types.Item
 	labels          []*types.Label
-	stack           []stack_item.StackItem
+	projects        []*types.Project
 	projectView     project_view.Model
-	drawer          drawer.Model
+	spinner         spinner.Model
+	events          events.Model
+	ctx             ctx.Context
+	taskCreate      task_create.Model
+	footer          footer.Model
 	fuzzyfinder     fuzzyfinder.Model
 	fuzzyfinderOpen bool
-	spinner         spinner.Model
-	taskCreate      task_create.Model
 	showSpinner     bool
 	loading         bool
-	drawerActive    bool
-	vp              viewport.Model
-	help            help.Model
 }
 
 // Calculates the viewport height minus the other UI components
 func (m Model) ContentHeight(screenHeight int) int {
 	if m.fuzzyfinderOpen {
 		return screenHeight - lipgloss.Height(m.fuzzyfinder.View()) - EventsHeight - SpinnerHeight
-	}
-	if m.drawerActive {
-		return screenHeight - lipgloss.Height(m.drawer.View()) - EventsHeight - SpinnerHeight
 	}
 	height := screenHeight - FooterHeight - EventsHeight - SpinnerHeight
 	if m.footer.ShowExtendedHelp() {
@@ -78,11 +72,10 @@ func (m Model) ContentHeight(screenHeight int) int {
 
 func New(ctx ctx.Context) *Model {
 	const (
-		defaultLoading      = true
-		defaultWidth        = 10
-		defaultHeight       = 50
-		defaultShowSpinner  = false
-		defaultDrawerActive = false
+		defaultLoading     = true
+		defaultWidth       = 10
+		defaultHeight      = 50
+		defaultShowSpinner = false
 	)
 	return &Model{
 		loading: defaultLoading,
@@ -103,22 +96,11 @@ func New(ctx ctx.Context) *Model {
 		footer:       footer.New(ctx),
 		vp:           viewport.New(defaultWidth, defaultHeight),
 		help:         help.New(),
-		drawerActive: defaultDrawerActive,
 	}
 }
 
 type SaveAndQuitMsg struct {
 	Error error
-}
-
-func (m *Model) doViewportStuff() {
-	top := m.Top()
-	topView := top.View()
-	if top.ComponentName() == "loading" {
-		// m.ctx.Logger.Debugf("Loading component on top, vp height %d, width %d", m.vp.Height, m.vp.Width)
-	}
-	// m.ctx.Logger.Debugf("Top is %s, it's view function returned [%s]", top.ComponentName(), top.View())
-	m.vp.SetContent(topView)
 }
 
 func (m *Model) setViewportDimensions(width, height int) {
@@ -200,9 +182,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	if m.fuzzyfinderOpen {
-		if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "ctrl+f" {
-			m.fuzzyfinderOpen = false
-			m.onFuzzyFinderClose()
+		finderName := m.fuzzyfinder.Name()
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			if finderName == "all" && msg.String() == "ctrl+f" {
+				m.fuzzyfinderOpen = false
+				m.onFuzzyFinderClose()
+			}
+			if finderName == "projects" && msg.String() == "ctrl+p" {
+				m.fuzzyfinderOpen = false
+				m.onFuzzyFinderClose()
+			}
+			// FIXME : Handle showing the help when you previously were in the
+			// fuzzyfinder
+			if msg.String() == "ctrl+_" {
+				m.fuzzyfinderOpen = false
+			}
 		}
 		if msg, ok := msg.(fuzzyfinder.SelectionMade); ok {
 			if project, ok := msg.Selection.(*types.Project); ok {
@@ -215,59 +209,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fuzzyfinder, cmd = m.fuzzyfinder.Update(msg)
 		return m, cmd
 	}
-	// Only respond to drawer updates until it leaves focus
-	if m.drawerActive {
-		if closedMsg, ok := msg.(drawer.DrawerClosedMessage); ok {
-			m.drawerActive = false
-			m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
-			m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-			top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-			stackItem, ok := top.(stack_item.StackItem)
-			if !ok {
-				m.ctx.Logger.Error("failed to coerce stack item to StackItem")
-			}
-			m.stack[len(m.stack)-1] = stackItem
-			if closedMsg.Item != nil {
-				m.ctx.Logger.Debugf("Selected %s", closedMsg.Item.Info())
-				return m, drawer.DrawerChoice(closedMsg.Item.Thing())
-			}
-			return m, nil
-		}
-		// Sort of works
-		// FIXME: Experiment
-		if showHelp, ok := msg.(tea.KeyMsg); ok && showHelp.String() == "ctrl+_" {
-			m.drawerActive = false
-			return m, func() tea.Msg { return msg }
-		}
-		if quitting, ok := msg.(tea.KeyMsg); ok && quitting.String() == "ctrl+c" {
-			m.drawerActive = false
-			m.ctx.Logger.Debug("Caught ctrl+c in active drawer")
-			return m, m.save()
-		}
-		m.drawer, cmd = m.drawer.Update(msg)
-		return m, cmd
-	}
 	switch msg := msg.(type) {
-	case messages.OpenDrawerMessage:
-		m.drawerActive = true
-		pickables := make([]drawer.Pickable, len(m.state.Projects))
-		for i, project := range m.state.Projects {
-			pickables[i] = project
-		}
-		m.drawer = drawer.New(m.ctx, pickables)
-		m.ctx.MainContentHeight = m.ContentHeight(m.ctx.ScreenHeight)
-		top := m.Top().Resize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-		m.setViewportDimensions(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
-		stackItem, ok := top.(stack_item.StackItem)
-		if !ok {
-			m.ctx.Logger.Error("failed to coerce stack item to StackItem")
-		}
-		m.stack[len(m.stack)-1] = stackItem
-		return m, nil
-	case drawer.DrawerSelectionMessage:
-		if msg.Project.Id != "" {
-			return m, m.SelectProject(msg.Project)
-		}
 	case messages.PushMessage:
 		m.ctx.Logger.Debugf("Got PushMessage for %s", msg.Id)
 		return onPush(m, msg)
@@ -399,7 +341,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+p":
-			return m, messages.OpenDrawer
+			if !m.fuzzyfinderOpen {
+				m.fuzzyfinder = m.makeFuzzyFinder("projects")
+				m.fuzzyfinderOpen = true
+				return m.onFuzzyFinderOpen()
+			}
+			m.fuzzyfinderOpen = false
+			m.onFuzzyFinderClose()
+			return m, nil
 		case "ctrl+c":
 			return m, m.save()
 		case "ctrl+_":
@@ -414,7 +363,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stack[len(m.stack)-1] = stackItem
 		case "ctrl+f":
 			if !m.fuzzyfinderOpen {
-				m.fuzzyfinder = m.makeFuzzyFinder()
+				m.fuzzyfinder = m.makeFuzzyFinder("all")
 				m.fuzzyfinderOpen = true
 				return m.onFuzzyFinderOpen()
 			}
@@ -472,17 +421,13 @@ func (m Model) View() string {
 	if m.loading && m.Top().ComponentName() == "loading" {
 		mainContent = m.Top().View()
 	}
-	// m.ctx.Logger.Debug(mainContent)
 	sections = append(sections, mainContent)
 	if m.showSpinner {
 		sections = append(sections, m.spinner.View())
 	}
 	sections = append(sections, m.events.View())
-	if !m.loading && !m.drawerActive && !m.fuzzyfinderOpen {
+	if !m.loading && !m.fuzzyfinderOpen {
 		sections = append(sections, m.footer.View(m.Top(), m.ctx.ScreenWidth))
-	}
-	if !m.loading && m.drawerActive {
-		sections = append(sections, m.drawer.View())
 	}
 	if m.fuzzyfinderOpen {
 		sections = append(sections, m.fuzzyfinder.View())
@@ -491,16 +436,24 @@ func (m Model) View() string {
 	return content
 }
 
-func (m Model) makeFuzzyFinder() fuzzyfinder.Model {
+func (m Model) makeFuzzyFinder(searchName string) fuzzyfinder.Model {
 	sources := make(fuzzyfinder.Sources, 0)
-	for _, project := range m.state.Projects {
-		sources = append(sources, project)
-	}
-	for _, label := range m.state.Labels {
-		sources = append(sources, label)
+	switch searchName {
+	case "projects":
+		for _, project := range m.state.Projects {
+			sources = append(sources, project)
+		}
+	default:
+		for _, project := range m.state.Projects {
+			sources = append(sources, project)
+		}
+		for _, label := range m.state.Labels {
+			sources = append(sources, label)
+		}
 	}
 	return fuzzyfinder.New(m.ctx, sources, 10,
-		fuzzyfinder.WithStyles(m.ctx.Theme.FuzzyFinder))
+		fuzzyfinder.WithStyles(m.ctx.Theme.FuzzyFinder),
+		fuzzyfinder.WithSearchName(searchName))
 }
 
 func (m *Model) onFuzzyFinderOpen() (tea.Model, tea.Cmd) {

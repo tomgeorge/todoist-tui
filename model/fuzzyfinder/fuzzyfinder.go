@@ -74,6 +74,7 @@ type Model struct {
 	viewport       viewport.Model
 	keys           keyMap
 	items          Sources
+	name           string
 	matches        fuzzy.Matches
 	search         textinput.Model
 	ctx            ctx.Context
@@ -100,6 +101,12 @@ func WithDebug(debug bool) ModelOption {
 	}
 }
 
+func WithSearchName(name string) ModelOption {
+	return func(m *Model) {
+		m.name = name
+	}
+}
+
 func New(ctx ctx.Context, items Sources, maxHeight int, options ...ModelOption) Model {
 
 	m := &Model{
@@ -111,6 +118,7 @@ func New(ctx ctx.Context, items Sources, maxHeight int, options ...ModelOption) 
 		matches:        fuzzy.Matches{},
 		items:          items,
 		search:         textinput.New(),
+		name:           "all",
 		matchIndex:     0,
 		unmatchedIndex: 0,
 		// FIXME: add default styles
@@ -125,6 +133,11 @@ func New(ctx ctx.Context, items Sources, maxHeight int, options ...ModelOption) 
 	m.search.Placeholder = "Search for something"
 	m.search.Focus()
 	return *m
+}
+
+// Get the name of the fuzzyfinder window
+func (m Model) Name() string {
+	return m.name
 }
 
 func (m Model) Init() tea.Cmd {
@@ -346,9 +359,9 @@ func (m Model) debugInformation() string {
 }
 
 func (m Model) statusLine() string {
-	command := m.styles.StatusLineCommand.Render("Find All")
+	command := m.styles.StatusLineCommand.Render(fmt.Sprintf("Find %s", m.name))
 	if m.searchStarted {
-		command = m.styles.StatusLineCommand.Render("FZF All")
+		command = m.styles.StatusLineCommand.Render(fmt.Sprintf("FZF %s", m.name))
 	}
 	selection := fmt.Sprintf("[%d/%d]", m.unmatchedIndex+1, len(m.items))
 	if m.searchStarted {

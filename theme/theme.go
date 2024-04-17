@@ -8,6 +8,7 @@ import (
 )
 
 // I ripped a lot of this from github.com/charmbracelet/huh
+// TODO: Document fields
 type Theme struct {
 	Form           lipgloss.Style
 	Group          lipgloss.Style
@@ -15,15 +16,33 @@ type Theme struct {
 	Blurred        FieldStyles
 	Focused        FieldStyles
 	Help           help.Styles
+	ListViewer     ListViewerComponentStyles
 	FuzzyFinder    FuzzyFinderComponentStyles
 }
 
+// TODO: Document fields
 type FuzzyFinderPromptStyles struct {
 	PromptStyle      lipgloss.Style
 	TextStyle        lipgloss.Style
 	PlaceholderStyle lipgloss.Style
 }
 
+// TODO: Document fields
+type ListViewerComponentStyles struct {
+	Items ListItemComponentStyles
+}
+
+// TODO: Document fields
+type ListItemComponentStyles struct {
+	SelectedTitle       lipgloss.Style
+	SelectedDescription lipgloss.Style
+	Title               lipgloss.Style
+	Description         lipgloss.Style
+	// TODO: The list delegate has some styles around dimming/ filter matching,
+	// add those
+}
+
+// TODO: Document fields
 type FuzzyFinderComponentStyles struct {
 	// The part of the status line that says "Fuzzy Search"
 	StatusLineCommand lipgloss.Style
@@ -217,8 +236,8 @@ func ThemeCatppuccin() *Theme {
 		blue     = lipgloss.AdaptiveColor{Light: light.Blue().Hex, Dark: dark.Blue().Hex}
 		// sky      = lipgloss.AdaptiveColor{Light: light.Sky().Hex, Dark: dark.Sky().Hex}
 		// sapphire = lipgloss.AdaptiveColor{Light: light.Sapphire().Hex, Dark: dark.Sapphire().Hex}
-		mauve = lipgloss.AdaptiveColor{Light: light.Mauve().Hex, Dark: dark.Mauve().Hex}
-		// peach    = lipgloss.AdaptiveColor{Light: light.Peach().Hex, Dark: dark.Peach().Hex}
+		mauve    = lipgloss.AdaptiveColor{Light: light.Mauve().Hex, Dark: dark.Mauve().Hex}
+		peach    = lipgloss.AdaptiveColor{Light: light.Peach().Hex, Dark: dark.Peach().Hex}
 		cursor   = lipgloss.AdaptiveColor{Light: light.Rosewater().Hex, Dark: dark.Rosewater().Hex}
 		crust    = lipgloss.AdaptiveColor{Light: light.Crust().Hex, Dark: dark.Crust().Hex}
 		surface0 = lipgloss.AdaptiveColor{Light: light.Surface0().Hex, Dark: dark.Surface0().Hex}
@@ -260,6 +279,40 @@ func ThemeCatppuccin() *Theme {
 	t.Help.FullKey.Foreground(subtext0)
 	t.Help.FullDesc.Foreground(overlay1)
 	t.Help.FullSeparator.Foreground(subtext0)
+	t.ListViewer = ListViewerComponentStyles{
+		Items: ListItemComponentStyles{
+			SelectedTitle:       lipgloss.Style{},
+			SelectedDescription: lipgloss.Style{},
+			Title:               lipgloss.Style{},
+			Description:         lipgloss.Style{},
+		},
+	}
+	t.ListViewer = ListViewerComponentStyles{
+		Items: ListItemComponentStyles{
+			SelectedTitle: lipgloss.NewStyle().
+				Foreground(mauve).
+				PaddingLeft(1).
+				BorderLeft(true).
+				BorderStyle(lipgloss.ThickBorder()).
+				BorderForeground(subtext0),
+			SelectedDescription: lipgloss.NewStyle().
+				Foreground(text).
+				PaddingLeft(1).
+				BorderLeft(true).
+				BorderStyle(lipgloss.ThickBorder()).
+				BorderForeground(subtext0),
+			Title: lipgloss.NewStyle().
+				PaddingLeft(1).
+				BorderLeft(true).
+				BorderStyle(lipgloss.HiddenBorder()).
+				Foreground(subtext1),
+			Description: lipgloss.NewStyle().
+				PaddingLeft(1).
+				BorderLeft(true).
+				BorderStyle(lipgloss.HiddenBorder()).
+				Foreground(subtext1),
+		},
+	}
 	t.FuzzyFinder = FuzzyFinderComponentStyles{
 		StatusLineCommand: lipgloss.NewStyle().
 			Background(red).
@@ -283,7 +336,7 @@ func ThemeCatppuccin() *Theme {
 			Bold(true),
 		SelectedItem: lipgloss.NewStyle().
 			Background(surface0).
-			Foreground(text),
+			Foreground(peach),
 		UnselectedItem: lipgloss.NewStyle().Foreground(text),
 		KindColor:      green,
 		TopBarColor:    surface2,

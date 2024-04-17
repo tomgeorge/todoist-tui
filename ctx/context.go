@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO: Document fields
 type Context struct {
 	Logger            *zap.SugaredLogger
 	Client            *sync.Client

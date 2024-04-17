@@ -35,6 +35,7 @@ const (
 	ExtendedHelpHeight = 10
 )
 
+// TODO: Document fields
 type Model struct {
 	project         *types.Project
 	state           *sync.SyncResponse
@@ -99,6 +100,7 @@ func New(ctx ctx.Context) *Model {
 	}
 }
 
+// TODO: Document fields
 type SaveAndQuitMsg struct {
 	Error error
 }
@@ -135,6 +137,7 @@ func (m *Model) save() tea.Cmd {
 	}
 }
 
+// TODO: Document fields
 type StartSpinnerMessage struct{}
 
 func (m Model) Init() tea.Cmd {
@@ -284,6 +287,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.StateUpdatedMessage:
 		for i, stackItem := range m.stack {
 			if stackItem.ComponentName() == "project_view" {
+				// FIXME: This feels like a hack sort of, why can't I just make a new
+				// project and push it onto the stack?
 				newStackItem := stack_item.StackItem(project_view.NewFromState(m.ctx, m.state))
 				m.stack[i] = newStackItem
 			}
@@ -449,6 +454,9 @@ func (m Model) makeFuzzyFinder(searchName string) fuzzyfinder.Model {
 		}
 		for _, label := range m.state.Labels {
 			sources = append(sources, label)
+		}
+		for _, task := range m.state.Items {
+			sources = append(sources, task)
 		}
 	}
 	return fuzzyfinder.New(m.ctx, sources, 10,

@@ -39,6 +39,7 @@ func (m Model) Model() tea.Model {
 	return m
 }
 
+// TODO: Document fields
 type keyMap struct {
 	ScrollUp        key.Binding
 	ScrollDown      key.Binding
@@ -95,17 +96,17 @@ var defaultKeys = keyMap{
 	),
 }
 
+// TODO: Document fields
 type Model struct {
 	list        list.Model
-	ctx         ctx.Context
 	project     *types.Project
 	create      *button.Model
 	help        help.Model
-	titleStyle  lipgloss.Style
 	keys        keyMap
 	tasks       []*types.Item
 	allLabels   []*types.Label
 	allProjects []*types.Project
+	ctx         ctx.Context
 	focused     bool
 }
 
@@ -113,10 +114,10 @@ type ModelOption func(m *Model)
 
 func NewListDelegate(ctx ctx.Context) list.DefaultDelegate {
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = ctx.Theme.Focused.Title.Copy().PaddingLeft(1).BorderStyle(lipgloss.ThickBorder()).BorderLeft(true)
-	delegate.Styles.SelectedDesc = ctx.Theme.Focused.Base
-	delegate.Styles.NormalTitle = ctx.Theme.Blurred.Base
-	delegate.Styles.NormalDesc = ctx.Theme.Blurred.Base
+	delegate.Styles.SelectedTitle = ctx.Theme.ListViewer.Items.SelectedTitle
+	delegate.Styles.SelectedDesc = ctx.Theme.ListViewer.Items.SelectedDescription
+	delegate.Styles.NormalTitle = ctx.Theme.ListViewer.Items.Title
+	delegate.Styles.NormalDesc = ctx.Theme.ListViewer.Items.Description
 	return delegate
 }
 
@@ -130,6 +131,7 @@ func NewList(ctx ctx.Context, items []list.Item, title string, width int, height
 	return list
 }
 
+// FIXME: This feels like a hack
 func NewFromState(ctx ctx.Context, state *sync.SyncResponse) *Model {
 	tasks := lo.Filter(state.Items, func(i *types.Item, _ int) bool {
 		return i.ProjectId == state.Projects[0].Id
@@ -138,9 +140,6 @@ func NewFromState(ctx ctx.Context, state *sync.SyncResponse) *Model {
 }
 
 func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []*types.Label, projects []*types.Project, opts ...ModelOption) *Model {
-	var (
-		defaultTitleStyle = lipgloss.NewStyle().Bold(true).Underline(true)
-	)
 	items := []list.Item{}
 	for _, task := range tasks {
 		items = append(items, task)
@@ -155,7 +154,6 @@ func New(ctx ctx.Context, project *types.Project, tasks []*types.Item, labels []
 		project:     project,
 		allLabels:   labels,
 		allProjects: projects,
-		titleStyle:  defaultTitleStyle,
 		list:        list,
 		create: button.New(
 			button.WithText("Create Task"),

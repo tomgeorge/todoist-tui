@@ -24,6 +24,7 @@ func (m Model) Model() tea.Model { return m }
 
 func (m Model) ComponentName() string { return "loading" }
 
+// TODO: Document fields
 type Model struct {
 	ctx          ctx.Context
 	loading      bool
@@ -109,6 +110,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.performSync(), load())
 }
 
+// TODO: Document fields
 type LoadingCompleteMessage struct{}
 
 func LoadingComplete() tea.Msg {
@@ -152,6 +154,7 @@ func (m Model) FooterInformation() stack_item.FooterSections {
 	}
 }
 
+// TODO: Document fields
 type keyMap struct {
 }
 

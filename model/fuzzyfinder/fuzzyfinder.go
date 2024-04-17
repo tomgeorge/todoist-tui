@@ -1,3 +1,8 @@
+// TODO: truncating logic
+// e.g. I would like to be able to search the whole gamut of the
+// task/project/what have you, but still only display a truncated match if it's
+// really long. The problem right now is in renderMatches() we only have access
+// to match.Str, which is a truncated thing
 package fuzzyfinder
 
 import (
@@ -34,11 +39,7 @@ func (s Sources) String(i int) string {
 	return s[i].SearchResultString()
 }
 
-type Screen struct {
-	Width  int
-	Height int
-}
-
+// TODO: Document fields
 type keyMap struct {
 	NextItem     key.Binding
 	PreviousItem key.Binding
@@ -68,6 +69,7 @@ var defaultKeys = keyMap{
 	),
 }
 
+// TODO: Document fields
 type Model struct {
 	styles         theme.FuzzyFinderComponentStyles
 	help           help.Model
@@ -245,6 +247,7 @@ func (m Model) atListTop() bool {
 	return m.unmatchedIndex-m.viewport.YOffset == 0
 }
 
+// TODO: Document fields
 type SelectionMade struct {
 	Selection Searchable
 }
@@ -288,7 +291,7 @@ func (m Model) renderItems() []string {
 		if !s.Implemented() {
 			implemented = "Not Implemented"
 		}
-		name := s.SearchResultString()
+		name := s.Display()
 		if m.unmatchedIndex == index {
 			kind := m.styles.SelectedItem.Copy().Foreground(m.styles.KindColor).Render(fmt.Sprintf("[%s] ", s.Kind()))
 			spaces := addSpacesUntil(m.ctx.ScreenWidth, kind, s.Display(), implemented)

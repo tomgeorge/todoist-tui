@@ -120,6 +120,7 @@ type UpdateItemArgs struct {
 // Move task to a different location, only one of ParentId, SectionId, or
 // ProjectId must be set
 // FIXME: Client code only supports ProjectId atm
+// TODO: Document fields
 type MoveItemArgs struct {
 	// The ID of the task
 	Id string `json:"id"`

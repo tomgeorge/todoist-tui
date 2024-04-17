@@ -14,6 +14,7 @@ const (
 )
 
 // This is from the rest api and includes the CommentCount property
+// TODO: Document fields
 type restProject struct {
 	Id             string    `json:"id"`
 	Name           string    `json:"name"`

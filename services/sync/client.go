@@ -25,6 +25,7 @@ const (
 
 var errNonNilContext = errors.New("context must not be nil")
 
+// TODO: Document fields
 type Client struct {
 	client    *http.Client
 	BaseURL   *url.URL
@@ -118,6 +119,7 @@ func (c *Client) WithAuthToken(token string) *Client {
 	return c2
 }
 
+// TODO: Document fields
 type ErrorResponse struct {
 	StatusCode int
 	Status     string
@@ -175,12 +177,14 @@ func NewResourceTypes(types ...string) ResourceTypes {
 	return types
 }
 
+// TODO: Document fields
 type SyncRequest struct {
 	SyncToken     string        `url:"sync_token,omitempty"`
 	ResourceTypes ResourceTypes `url:"resource_types,omitempty"`
 	Commands      CommandList   `url:"commands,omitempty"`
 }
 
+// TODO: Document fields
 type Command struct {
 	Type   string      `json:"type" url:"type"`
 	TempId string      `json:"temp_id" url:"temp_id"`
@@ -252,11 +256,13 @@ func (c CommandList) EncodeValues(key string, v *url.Values) error {
 
 // Struct defined to handle Todoist sending back either "ok" or an object in the
 // sync status
+// TODO: Document fields
 type OperationResult struct {
 	Ok        bool
 	ErrorCode SyncError
 }
 
+// TODO: Document fields
 type SyncError struct {
 	ErrorCode int    `json:"error_code"`
 	Error     string `json:"error"`
@@ -471,6 +477,7 @@ const (
 	KarmaTrendDown KarmaTrendDirection = "down"
 )
 
+// TODO: Document fields
 type DaysItem struct {
 	Date  time.Time `json:"date"`
 	Items []struct {
@@ -603,6 +610,7 @@ const (
 	PremiumStatusReasonTeamsBusinessMember   PremiumStatusReason = "teams_business_member"
 )
 
+// TODO: Document fields
 type UserTimeZoneInfo struct {
 	GmtString string `json:"gmt_string"`
 	Hours     int    `json:"hours"`

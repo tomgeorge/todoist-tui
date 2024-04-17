@@ -11,6 +11,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
+// TODO: Document fields
 type Model struct {
 	ctx               ctx.Context
 	focused           bool
@@ -25,6 +26,7 @@ type Model struct {
 	keys              keyMap
 }
 
+// TODO: Document fields
 type keyMap struct {
 	Edit        key.Binding
 	StopEditing key.Binding

@@ -14,6 +14,7 @@ import (
 )
 
 /* Keymaps and help */
+// TODO: Document fields
 type keyMap struct {
 	New            key.Binding
 	Confirm        key.Binding
@@ -80,26 +81,31 @@ type PickerItem interface {
 	Style() lipgloss.Style
 }
 
+// FIXME: remove?
 // This is a possible way to genericize some of the picker item stuff and still
 // have the underlying type abvailable. You wouldn't have to coerce it to the
 // interface type all the time which might be useful. The picker could also
 // maybe have access to the underlying type if it needs it, but I don't know if
 // it does yet.
 //
+// FIXME: remove?
 // The interface would describe the behavior, and the generic item type would
 // maybe make it's usage easier.
 // type GenericPickerItem[T PickerItem] struct {
 // 	Underlying T
 // }
 //
+// FIXME: remove?
 // func (a *GenericPickerItem[T]) Render() string {
 // 	return a.Underlying.Render()
 // }
 //
+// FIXME: remove?
 // func (a *GenericPickerItem[T]) Style() lipgloss.Style {
 // 	return a.Underlying.Style()
 // }
 //
+// FIXME: remove?
 // func NewList[T PickerItem](elems ...T) []GenericPickerItem[T] {
 // 	items := make([]GenericPickerItem[T], len(elems))
 // 	for i, e := range elems {
@@ -107,7 +113,7 @@ type PickerItem interface {
 // 	}
 // 	return items
 // }
-//
+// FIXME: remove?
 // func TryWithLabels() {
 // 	list := NewList[types.Label]()
 // }
@@ -123,6 +129,7 @@ func NewPickerItem[T PickerItem](elements []T) []PickerItem {
 
 /* Model, constructor, and options */
 
+// TODO: Document fields
 type Model struct {
 	ctx               ctx.Context
 	debug             bool

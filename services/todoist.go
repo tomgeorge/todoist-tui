@@ -20,6 +20,7 @@ const (
 
 var errNonNilContext = errors.New("context must not be nil")
 
+// TODO: Document fields
 type Client struct {
 	client    *http.Client
 	BaseURL   *url.URL
@@ -29,6 +30,7 @@ type Client struct {
 	Tasks  *TasksService
 }
 
+// TODO: Document fields
 type service struct {
 	client *Client
 }
@@ -120,6 +122,7 @@ func (c *Client) WithAuthToken(token string) *Client {
 	return c2
 }
 
+// TODO: Document fields
 type ErrorResponse struct {
 	StatusCode int
 	Status     string

@@ -13,6 +13,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
+// TODO: Document fields
 type keyMap struct {
 	MoveLeft                     key.Binding
 	MoveRight                    key.Binding
@@ -93,6 +94,7 @@ func (m Model) HelpKeys() help.KeyMap {
 	return m.keys
 }
 
+// TODO: Document fields
 type Model struct {
 	ctx                    ctx.Context
 	debug                  bool
@@ -609,6 +611,7 @@ func (m Model) View() string {
 	return content
 }
 
+// TODO: Document fields
 type DueDateContent struct {
 	HasDueDate             bool
 	AbsoluteDate           time.Time

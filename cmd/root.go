@@ -19,6 +19,7 @@ import (
 
 var CFG *config.Config
 
+// TODO: Document fields
 type rootFlags struct {
 	apiToken   string
 	configFile string

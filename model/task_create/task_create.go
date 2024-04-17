@@ -27,6 +27,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/types"
 )
 
+// TODO: Document fields
 type keyMap struct {
 	ScrollUp    key.Binding
 	ScrollDown  key.Binding
@@ -96,6 +97,7 @@ var defaultKeys = keyMap{
 	),
 }
 
+// TODO: Document fields
 type Model struct {
 	ctx           ctx.Context
 	viewport      viewport.Model
@@ -142,8 +144,11 @@ const (
 
 type ModelOption func(*Model)
 
+// TODO: Document fields
 type ItemMessage struct {
 }
+
+// TODO: Document fields
 type ItemUpdatedMsg struct {
 	Task  *types.Item
 	Error error

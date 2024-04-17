@@ -14,6 +14,7 @@ import (
 )
 
 // PushMessage pushes a new model onto the stack
+// TODO: Document fields
 type PushMessage struct {
 	Id    string
 	Model tea.Model
@@ -31,6 +32,7 @@ func Push(id string, model tea.Model) tea.Cmd {
 }
 
 // PopMessage pops the top model off the stack
+// TODO: Document fields
 type PopMessage struct{}
 
 // Return a tea.Cmd that asks the root model to pop the top model off of the
@@ -42,6 +44,7 @@ func Pop() tea.Cmd {
 }
 
 // A StateMessage is sent back from the client
+// TODO: Document fields
 type StateMessage struct {
 	State *sync.SyncResponse
 	Error error
@@ -52,6 +55,7 @@ func StateUpdated() tea.Msg {
 }
 
 // The state was updated and the view should redraw itself
+// TODO: Document fields
 type StateUpdatedMessage struct{}
 
 func TaskOperation(client *sync.Client, commands sync.CommandList) tea.Cmd {
@@ -66,6 +70,7 @@ func TaskOperation(client *sync.Client, commands sync.CommandList) tea.Cmd {
 	}
 }
 
+// TODO: Document fields
 type OperationPendingMessage struct{}
 
 func OperationPending() tea.Cmd {
@@ -74,6 +79,7 @@ func OperationPending() tea.Cmd {
 	}
 }
 
+// TODO: Document fields
 type OperationCompleteMessage struct{}
 
 func OperationComplete() tea.Cmd {
@@ -83,6 +89,7 @@ func OperationComplete() tea.Cmd {
 }
 
 // Returned when an update is sent to the server
+// TODO: Document fields
 type OperationResponse struct {
 	State    *sync.SyncResponse
 	Commands []sync.Command
@@ -90,6 +97,7 @@ type OperationResponse struct {
 }
 
 // Sent after a successful StateMessage to write to the filesystem
+// TODO: Document fields
 type SaveStateMessage struct {
 	Success bool
 	Error   error
@@ -122,9 +130,11 @@ func SaveState(ctx ctx.Context, state *sync.SyncResponse) tea.Cmd {
 }
 
 // LoadingMessage is sent on init when loading the application
+// TODO: Document fields
 type LoadingMessage struct{}
 
 // CreateItemMessage is sent when a task was attempted to be created
+// TODO: Document fields
 type TaskCreatedMessage struct {
 	Task  *types.Item
 	Error error
@@ -134,6 +144,7 @@ func OpenDrawer() tea.Msg {
 	return OpenDrawerMessage{}
 }
 
+// TODO: Document fields
 type OpenDrawerMessage struct {
 }
 
@@ -144,6 +155,7 @@ const PreviousProject ChangeProjectDirection = "backwards"
 
 // Send to ask the UI to change the currently shown project, should only be sent
 // from the project view component
+// TODO: Document fields
 type ChangeProjectMessage struct {
 	From      *types.Project
 	Direction ChangeProjectDirection

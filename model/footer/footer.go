@@ -10,6 +10,7 @@ import (
 	"github.com/tomgeorge/todoist-tui/model/stack_item"
 )
 
+// TODO: Document fields
 type Model struct {
 	help             help.Model
 	ctx              ctx.Context

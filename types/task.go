@@ -1,7 +1,12 @@
 package types
 
-import "time"
+import (
+	"time"
 
+	"github.com/muesli/reflow/truncate"
+)
+
+// TODO: Document fields
 type CreateTaskRequest struct {
 	Content      string   `json:"content"`
 	Description  string   `json:"description,omitempty"`
@@ -20,6 +25,7 @@ type CreateTaskRequest struct {
 	DurationUnit string   `json:"duration_unit,omitempty"`
 }
 
+// TODO: Document fields
 type ItemDuration struct {
 	Amount int    `json:"amount,omitempty"`
 	Unit   string `json:"unit,omitempty"`
@@ -112,4 +118,24 @@ type Item struct {
 	V2ProjectID string `json:"v2_project_id,omitempty"`
 	// UNDOCUMENTED. Seems to be a new version of the section ID
 	V2SectionID any `json:"v2_section_id,omitempty"`
+}
+
+func (t Item) Display() string {
+	return truncate.StringWithTail(t.Content, 25, "...")
+}
+
+func (t Item) SearchResultString() string {
+	return truncate.StringWithTail(t.Content, 25, "...")
+}
+
+func (t Item) Implemented() bool {
+	return true
+}
+
+func (t Item) Kind() string {
+	return "Task"
+}
+
+func (t Item) IsMatch(matchContent string) bool {
+	return t.Content == matchContent
 }

@@ -12,20 +12,24 @@ type StackItem interface {
 	HasHelp
 }
 
+// TODO: Document fields
 type Component interface {
 	ComponentName() string
 	Model() tea.Model
 	Resize(width, height int) tea.Model
 }
 
+// TODO: Document fields
 type FooterInformation interface {
 	FooterInformation() FooterSections
 }
 
+// TODO: Document fields
 type HasHelp interface {
 	KeyMap() help.KeyMap
 }
 
+// TODO: Document fields
 type FooterSections struct {
 	Location   string
 	Dirty      string

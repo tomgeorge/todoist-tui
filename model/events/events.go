@@ -12,11 +12,13 @@ import (
 	"github.com/tomgeorge/todoist-tui/ctx"
 )
 
+// TODO: Document fields
 type Model struct {
 	Events []Event
 	Ctx    ctx.Context
 }
 
+// TODO: Document fields
 type Event struct {
 	Timer   timer.Model
 	Ticks   int
@@ -25,6 +27,7 @@ type Event struct {
 	Style   lipgloss.Style
 }
 
+// TODO: Document fields
 type NewMessage struct {
 	Timeout  bool
 	Duration time.Duration

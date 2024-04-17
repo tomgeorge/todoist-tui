@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// TODO: Document fields
 type keyMap struct {
 	Confirm key.Binding
 }
@@ -42,10 +43,12 @@ func (m Model) HelpKeys() help.KeyMap {
 
 type SubmitFn func(payload interface{}) tea.Cmd
 
+// TODO: Document fields
 type SubmitMsg struct {
 	payload interface{}
 }
 
+// TODO: Document fields
 type Model struct {
 	text          string
 	enabled       bool

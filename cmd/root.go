@@ -23,6 +23,7 @@ var CFG *config.Config
 type rootFlags struct {
 	apiToken   string
 	configFile string
+	project    string
 }
 
 func NewRootCmd() *cobra.Command {
@@ -37,6 +38,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&flags.apiToken, "api-token", "", "Todoist API Token")
 	cmd.Flags().StringVar(&flags.configFile, "config", "", "Config file")
+	cmd.Flags().StringVar(&flags.project, "project", "", "Project to open")
 	viper.BindPFlags(cmd.Flags())
 
 	return cmd
@@ -92,6 +94,7 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("loading logger: %v", err)
 	}
+	// project := viper.GetString("project")
 	client := sync.NewClient(nil).WithAuthToken(viper.GetString("api-token"))
 	ctx := ctx.New(&config, logger.Sugar(), client).WithTheme(theme.ThemeCatppuccin())
 	initialModel := model.New(ctx)

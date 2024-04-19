@@ -19,13 +19,20 @@ type Context struct {
 	MainContentHeight int
 }
 
-func New(config *config.Config, logger *zap.SugaredLogger, client *sync.Client) Context {
-	return Context{
+type ContextOption func(ctx *Context)
+
+func New(config *config.Config, logger *zap.SugaredLogger, client *sync.Client, opts ...ContextOption) Context {
+	ctx := &Context{
 		Logger: logger,
 		Client: client,
 		Config: config,
 		Theme:  theme.ThemeBase(),
 	}
+
+	for _, opt := range opts {
+		opt(ctx)
+	}
+	return *ctx
 }
 
 func (ctx Context) WithTheme(theme *theme.Theme) Context {

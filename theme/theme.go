@@ -18,6 +18,7 @@ type Theme struct {
 	Help           help.Styles
 	ListViewer     ListViewerComponentStyles
 	FuzzyFinder    FuzzyFinderComponentStyles
+	HelpKeys       HelpKeyStyles
 }
 
 // TODO: Document fields
@@ -30,6 +31,12 @@ type FuzzyFinderPromptStyles struct {
 // TODO: Document fields
 type ListViewerComponentStyles struct {
 	Items ListItemComponentStyles
+}
+
+// TODO: Document fields
+type HelpKeyStyles struct {
+	Key  lipgloss.Style
+	Help lipgloss.Style
 }
 
 // TODO: Document fields
@@ -345,6 +352,11 @@ func ThemeCatppuccin() *Theme {
 			TextStyle:        lipgloss.NewStyle().Foreground(text),
 			PlaceholderStyle: lipgloss.NewStyle().Foreground(surface2),
 		},
+	}
+
+	t.HelpKeys = HelpKeyStyles{
+		Key:  lipgloss.NewStyle().Foreground(pink),
+		Help: lipgloss.NewStyle().Foreground(text),
 	}
 
 	return &t

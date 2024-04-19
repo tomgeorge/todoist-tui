@@ -385,7 +385,7 @@ func (m Model) View() string {
 		sections = append(sections, m.debugInformation())
 	}
 	sections = append(sections, lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.ThickBorder()).
 		BorderBottom(true).
 		BorderForeground(m.styles.TopBarColor).
 		Render(strings.Repeat(" ", max(0, m.ctx.ScreenWidth))))

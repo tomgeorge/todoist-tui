@@ -1,6 +1,7 @@
 package footer
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -100,7 +101,13 @@ func (m Model) View(top stack_item.StackItem, screenWidth int) string {
 	sb.WriteString("\n")
 
 	if m.help.ShowAll {
-		sb.WriteString(m.help.View(top.KeyMap()))
+		for _, row := range top.KeyMap().FullHelp() {
+			for _, key := range row {
+				sb.WriteString(fmt.Sprintf("%s ", m.ctx.Theme.HelpKeys.Key.Render(key.Help().Key)))
+				sb.WriteString(fmt.Sprintf("%s\n", m.ctx.Theme.HelpKeys.Help.Render(key.Help().Desc)))
+			}
+		}
+		// sb.WriteString(m.help.View(top.KeyMap()))
 	}
 	return sb.String()
 }

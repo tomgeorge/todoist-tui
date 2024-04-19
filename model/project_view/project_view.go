@@ -47,8 +47,10 @@ type keyMap struct {
 	PreviousProject key.Binding
 	Help            key.Binding
 	Confirm         key.Binding
-	Choose          key.Binding
-	Quit            key.Binding
+	// FIXME: Find and choose don't belong here and are handled in the ui model
+	Find   key.Binding
+	Choose key.Binding
+	Quit   key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -56,7 +58,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 }
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.ScrollUp, k.ScrollDown, k.Confirm, k.Choose},
+		{k.ScrollUp, k.ScrollDown, k.NextProject, k.PreviousProject, k.Find, k.Confirm, k.Choose},
 		{k.Help, k.Quit},
 	}
 }
@@ -64,11 +66,11 @@ func (k keyMap) FullHelp() [][]key.Binding {
 var defaultKeys = keyMap{
 	ScrollUp: key.NewBinding(
 		key.WithKeys("ctrl+k", "up"),
-		key.WithHelp("ctrl+k", "scroll up"),
+		key.WithHelp("ctrl+k/↑", "scroll up"),
 	),
 	ScrollDown: key.NewBinding(
 		key.WithKeys("ctrl+j", "down"),
-		key.WithHelp("ctrl+j", "scroll down"),
+		key.WithHelp("ctrl+j/↓", "scroll down"),
 	),
 	NextProject: key.NewBinding(
 		key.WithKeys("ctrl+l"),
@@ -86,9 +88,13 @@ var defaultKeys = keyMap{
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "confirm"),
 	),
+	Find: key.NewBinding(
+		key.WithKeys("ctrl+f"),
+		key.WithHelp("ctrl+f", "(sort of) fuzzy find anything"),
+	),
 	Choose: key.NewBinding(
 		key.WithKeys("ctrl+p"),
-		key.WithHelp("ctrl+p", "Quick choose project"),
+		key.WithHelp("ctrl+p", "choose project"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),

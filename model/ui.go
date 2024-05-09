@@ -1,3 +1,4 @@
+// This is LONG and BAD
 package model
 
 import (
@@ -66,7 +67,8 @@ func (m Model) ContentHeight(screenHeight int) int {
 	}
 	height := screenHeight - FooterHeight - EventsHeight - SpinnerHeight
 	if m.footer.ShowExtendedHelp() {
-		height = screenHeight - ExtendedHelpHeight - EventsHeight - SpinnerHeight
+		topHeight := lipgloss.Height(m.footer.View(m.Top(), m.ctx.ScreenWidth))
+		height = screenHeight - max(ExtendedHelpHeight, topHeight) - EventsHeight - SpinnerHeight
 	}
 	return height
 }

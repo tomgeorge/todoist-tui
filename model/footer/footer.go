@@ -107,7 +107,6 @@ func (m Model) View(top stack_item.StackItem, screenWidth int) string {
 				sb.WriteString(fmt.Sprintf("%s\n", m.ctx.Theme.HelpKeys.Help.Render(key.Help().Desc)))
 			}
 		}
-		// sb.WriteString(m.help.View(top.KeyMap()))
 	}
 	return sb.String()
 }

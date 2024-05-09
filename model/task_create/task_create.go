@@ -925,5 +925,24 @@ func (m Model) FooterInformation() stack_item.FooterSections {
 }
 
 func (m Model) KeyMap() help.KeyMap {
-	return m.title.HelpKeys()
+	switch m.focusIndex {
+	case titleSection:
+		return m.title.HelpKeys()
+	case projectSection:
+		return m.project.HelpKeys()
+	case dueSection:
+		return m.dueDate.HelpKeys()
+	case descriptionSection:
+		return m.description.HelpKeys()
+	case labelsSection:
+		return m.labels.HelpKeys()
+	case prioritySection:
+		return m.priority.HelpKeys()
+	case submitSection:
+		return m.submit.HelpKeys()
+	case cancelSection:
+		return m.cancel.HelpKeys()
+	default:
+		return m.title.HelpKeys()
+	}
 }

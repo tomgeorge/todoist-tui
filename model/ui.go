@@ -205,7 +205,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg, ok := msg.(fuzzyfinder.SelectionMade); ok {
 			if project, ok := msg.Selection.(*types.Project); ok {
-				m.ctx.Logger.Debug("Got something %s", project.Name)
+				m.ctx.Logger.Debug("Selecting project %s", project.Name)
 				m.fuzzyfinderOpen = false
 				m.onFuzzyFinderClose()
 				return m, m.SelectProject(*project)

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/muesli/reflow/truncate"
@@ -32,7 +33,7 @@ type ItemDuration struct {
 }
 
 func (i *Item) Title() string       { return i.Content }
-func (i *Item) Description() string { return i.TaskDescription }
+func (i *Item) Description() string { return fmt.Sprintf("%s\n%v", i.TaskDescription, i.Labels) }
 func (i *Item) FilterValue() string { return i.Content }
 
 // This is also known as a task

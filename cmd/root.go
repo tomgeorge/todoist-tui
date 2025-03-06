@@ -67,7 +67,7 @@ func initializeCobra(cmd *cobra.Command) {
 	}
 }
 
-func loadLogger(logfilePath string) (*zap.Logger, error) {
+func newLogger(logfilePath string) (*zap.Logger, error) {
 	cfg := zap.NewDevelopmentConfig()
 	cfg.OutputPaths = []string{
 		logfilePath,
@@ -90,7 +90,7 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	logger, err := loadLogger(config.Log)
+	logger, err := newLogger(config.Log)
 	if err != nil {
 		return fmt.Errorf("loading logger: %v", err)
 	}

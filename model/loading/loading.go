@@ -76,8 +76,16 @@ func (m *Model) performSync() tea.Cmd {
 		if err != nil && !os.IsNotExist(err) {
 			return messages.StateMessage{State: nil, Error: err}
 		}
-		m.ctx.Logger.Debug("found a state file on the machine:\n---\n%s\n---\n")
+
+		m.ctx.Logger.Debug("found a state file on the machine")
 		// m.ctx.Logger.Debugf("found a state file on the machine:\n---\n%s\n---\n", util.PrettyJSON(stateFile))
+
+		// If the state file has stuff init, we should try and merge the existing
+		// state file with the response from the server
+		// TODO: We could also check for a zero value of the SyncResponse struct,
+		// e.g. if the file contains `{}` but that might throw an error when trying
+		// to unmarshal
+		// FIXME: Redact the user's api token from the state file on the machine
 		if len(stateFile) != 0 {
 			state := &sync.SyncResponse{}
 			err := json.Unmarshal(stateFile, state)
@@ -93,6 +101,8 @@ func (m *Model) performSync() tea.Cmd {
 			}
 			return messages.StateMessage{State: sync.Merge(state, recentUpdates), Error: nil}
 		}
+
+		// If the state file was not found, do a full sync
 		state, err := m.ctx.Client.FullSync(context.Background())
 		m.ctx.Logger.Debugf("No state file sync: %v", err)
 		return messages.StateMessage{State: state, Error: err}
